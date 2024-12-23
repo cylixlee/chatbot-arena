@@ -1,29 +1,26 @@
 # V_1.3 # Include TabNET + OPTUNA Tunning
 # !pip install -qq pytorch_tabnet
-import pandas as pd
-import numpy as np
-from tqdm import tqdm
-from catboost import CatBoostClassifier, Pool, CatBoostRegressor
-from pytorch_tabnet.tab_model import TabNetRegressor,TabNetClassifier
+import string
+import warnings
+
 import lightgbm as lgb
-from lightgbm import LGBMRegressor, early_stopping
-from sklearn.model_selection import StratifiedKFold, KFold, GroupKFold
-from sklearn.model_selection import *
-from sklearn.metrics import *
-# from IPython.display import clear_output
-from xgboost import XGBRegressor, XGBClassifier
+import numpy as np
+from catboost import CatBoostClassifier, Pool, CatBoostRegressor
+from lightgbm import early_stopping
+from nltk.corpus import stopwords
+from pytorch_tabnet.tab_model import TabNetRegressor, TabNetClassifier
+from sklearn.decomposition import TruncatedSVD
 from sklearn.ensemble import VotingRegressor, VotingClassifier
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.decomposition import TruncatedSVD
-from colorama import Fore
-from nltk.corpus import stopwords
-import nltk
-import string
-import optuna
-import warnings
+from sklearn.metrics import *
+from sklearn.model_selection import *
 from sklearn.preprocessing import LabelEncoder
+from tqdm import tqdm
 
-warnings.simplefilter('ignore')
+# from IPython.display import clear_output
+from xgboost import XGBRegressor, XGBClassifier
+
+warnings.simplefilter("ignore")
 import optuna
 from typing import Dict, Any, Optional, Union, Tuple
 from colorama import Fore
@@ -42,18 +39,50 @@ SEED = 42
 
 
 class AbdBase:
-    model_name = ["LGBM", "CAT", "XGB", "Voting", 'TABNET']
-    metrics = ["roc_auc", "accuracy", "f1", "precision", "recall", 'rmse', 'wmae', "rmsle", "mae", "r2", 'mse']
+    model_name = ["LGBM", "CAT", "XGB", "Voting", "TABNET"]
+    metrics = [
+        "roc_auc",
+        "accuracy",
+        "f1",
+        "precision",
+        "recall",
+        "rmse",
+        "wmae",
+        "rmsle",
+        "mae",
+        "r2",
+        "mse",
+    ]
     problem_types = ["classification", "regression"]
-    cv_types = ['SKF', 'KF', 'GKF', 'GSKF', "RKF"]
-    current_version = ['V_1.3']
+    cv_types = ["SKF", "KF", "GKF", "GSKF", "RKF"]
+    current_version = ["V_1.3"]
 
-    def __init__(self, train_data, test_data=None, target_column=None, tf_vec=False, gpu=False, numpy_data=False,
-                 problem_type="classification", metric="roc_auc", seed=SEED, ohe_fe=False, label_encode=False,
-                 target_encode=False,
-                 n_splits=5, cat_features=None, num_classes=None, prob=False, stat_fe=None,
-                 logger: Optional[logging.Logger] = None,
-                 early_stop=False, test_prob=False, fold_type='SKF', weights=None, multi_column_tfidf=None):
+    def __init__(
+        self,
+        train_data,
+        test_data=None,
+        target_column=None,
+        tf_vec=False,
+        gpu=False,
+        numpy_data=False,
+        problem_type="classification",
+        metric="roc_auc",
+        seed=SEED,
+        ohe_fe=False,
+        label_encode=False,
+        target_encode=False,
+        n_splits=5,
+        cat_features=None,
+        num_classes=None,
+        prob=False,
+        stat_fe=None,
+        logger: Optional[logging.Logger] = None,
+        early_stop=False,
+        test_prob=False,
+        fold_type="SKF",
+        weights=None,
+        multi_column_tfidf=None,
+    ):
 
         self.train_data = train_data
         self.test_data = test_data
@@ -84,16 +113,16 @@ class AbdBase:
         self._display_initial_info()
 
         if self.tf_vec:
-            self.text_column = tf_vec.get('text_column', '')
-            self.max_features = tf_vec.get('max_features', 1000)
-            self.n_components = tf_vec.get('n_components', 10)
+            self.text_column = tf_vec.get("text_column", "")
+            self.max_features = tf_vec.get("max_features", 1000)
+            self.n_components = tf_vec.get("n_components", 10)
             print(Fore.YELLOW + f"\nTf-IDF Processing For Col: {self.text_column}")
             if self.train_data is not None:
                 self.train_data = self.apply_tfidf_svd(
                     df=self.train_data,
                     text_column=self.text_column,
                     max_features=self.max_features,
-                    n_components=self.n_components
+                    n_components=self.n_components,
                 )
 
             if self.test_data is not None:
@@ -101,12 +130,12 @@ class AbdBase:
                     df=self.test_data,
                     text_column=self.text_column,
                     max_features=self.max_features,
-                    n_components=self.n_components
+                    n_components=self.n_components,
                 )
 
         if self.stat_fe:
             print(Fore.YELLOW + f"\nAdding Stats Features")
-            self.txt_columns = stat_fe.get('txt_columns', txt_columns)
+            self.txt_columns = stat_fe.get("txt_columns", txt_columns)
 
             if self.train_data is not None:
                 self.train_data = self.text_stat(
@@ -123,7 +152,7 @@ class AbdBase:
         if self.ohe_fe:
 
             print(Fore.YELLOW + f"\n---> Adding OHE Features\n")
-            self.cat_c = ohe_fe.get('cat_c', [])
+            self.cat_c = ohe_fe.get("cat_c", [])
             if self.train_data is not None and self.test_data is not None:
                 self.train_data, self.test_data = self.ohe_transform(
                     train=self.train_data,
@@ -133,7 +162,7 @@ class AbdBase:
 
         if self.label_encode:
             print(Fore.YELLOW + f"\n---> Applying Label Encoder\n")
-            self.cat_c = label_encode.get('cat_c', [])
+            self.cat_c = label_encode.get("cat_c", [])
             if self.train_data is not None and self.test_data is not None:
                 self.train_data, self.test_data = self.label_encode_transform(
                     train=self.train_data,
@@ -143,8 +172,8 @@ class AbdBase:
 
         if self.target_encode:
             print(Fore.YELLOW + f"\n---> Applying Target Encoder\n")
-            self.cat_c = target_encode.get('cat_c', [])
-            self.target_col = target_encode.get('target_col', [])
+            self.cat_c = target_encode.get("cat_c", [])
+            self.target_col = target_encode.get("target_col", [])
             if self.train_data is not None and self.test_data is not None:
                 self.train_data, self.test_data = self.factorize_and_encode(
                     train=self.train_data,
@@ -155,10 +184,13 @@ class AbdBase:
 
         if self.multi_column_tfidf:
 
-            self.text_columns = multi_column_tfidf.get('text_columns', [])
-            self.max_features = multi_column_tfidf.get('max_features', 1000)
+            self.text_columns = multi_column_tfidf.get("text_columns", [])
+            self.max_features = multi_column_tfidf.get("max_features", 1000)
 
-            print(Fore.YELLOW + f"\nMulti-TF_IDF Processing For Columns: {self.text_columns}")
+            print(
+                Fore.YELLOW
+                + f"\nMulti-TF_IDF Processing For Columns: {self.text_columns}"
+            )
 
             if self.train_data is not None and self.test_data is not None:
                 self.train_data, self.test_data = self.tf_fe(
@@ -168,15 +200,24 @@ class AbdBase:
                     max_features=self.max_features,
                 )
 
-        self.X_train = self.train_data.drop(self.target_column,
-                                            axis=1).to_numpy() if self.numpy_data else self.train_data.drop(
-            self.target_column, axis=1)
-        self.y_train = self.train_data[self.target_column].to_numpy() if self.numpy_data else self.train_data[
-            self.target_column]
-        self.y_train = self.y_train.reshape(-1, 1) if self.model_name == 'TABNET' else self.y_train
+        self.X_train = (
+            self.train_data.drop(self.target_column, axis=1).to_numpy()
+            if self.numpy_data
+            else self.train_data.drop(self.target_column, axis=1)
+        )
+        self.y_train = (
+            self.train_data[self.target_column].to_numpy()
+            if self.numpy_data
+            else self.train_data[self.target_column]
+        )
+        self.y_train = (
+            self.y_train.reshape(-1, 1) if self.model_name == "TABNET" else self.y_train
+        )
 
         if self.test_data is not None:
-            self.X_test = self.test_data.to_numpy() if self.numpy_data else self.test_data
+            self.X_test = (
+                self.test_data.to_numpy() if self.numpy_data else self.test_data
+            )
         else:
             self.X_test = None
 
@@ -187,13 +228,17 @@ class AbdBase:
         for col in cat_cols:
             le = LabelEncoder()
             train[col] = le.fit_transform(train[col])
-            test[col] = test[col].apply(lambda x: le.transform([x])[0] if x in le.classes_ else -1)
+            test[col] = test[col].apply(
+                lambda x: le.transform([x])[0] if x in le.classes_ else -1
+            )
             label_encoders[col] = le
 
         return train, test
 
     @staticmethod
-    def factorize_and_encode(train: pd.DataFrame, test: pd.DataFrame, cat_cols: list, target_col) -> pd.DataFrame:
+    def factorize_and_encode(
+        train: pd.DataFrame, test: pd.DataFrame, cat_cols: list, target_col
+    ) -> pd.DataFrame:
 
         combined = pd.concat([train, test], axis=0, ignore_index=True)
 
@@ -211,8 +256,8 @@ class AbdBase:
                 elif combined[c].dtype == "int64":
                     combined[c] = combined[c].astype("int32")
 
-        train_encoded = combined.iloc[:len(train)].copy()
-        test_encoded = combined.iloc[len(train):].reset_index(drop=True).copy()
+        train_encoded = combined.iloc[: len(train)].copy()
+        test_encoded = combined.iloc[len(train) :].reset_index(drop=True).copy()
 
         test_encoded = test_encoded.drop(columns=[target_col])
 
@@ -221,15 +266,19 @@ class AbdBase:
     @staticmethod
     def ohe_transform(train: pd.DataFrame, test: pd.DataFrame, cat_cols: list):
 
-        ohe = OneHotEncoder(sparse=False, handle_unknown='ignore')
+        ohe = OneHotEncoder(sparse=False, handle_unknown="ignore")
 
-        train_ohe = pd.DataFrame(ohe.fit_transform(train[cat_cols]),
-                                 columns=ohe.get_feature_names_out(cat_cols),
-                                 index=train.index)
+        train_ohe = pd.DataFrame(
+            ohe.fit_transform(train[cat_cols]),
+            columns=ohe.get_feature_names_out(cat_cols),
+            index=train.index,
+        )
 
-        test_ohe = pd.DataFrame(ohe.transform(test[cat_cols]),
-                                columns=ohe.get_feature_names_out(cat_cols),
-                                index=test.index)
+        test_ohe = pd.DataFrame(
+            ohe.transform(test[cat_cols]),
+            columns=ohe.get_feature_names_out(cat_cols),
+            index=test.index,
+        )
 
         train = train.drop(columns=cat_cols).reset_index(drop=True)
         test = test.drop(columns=cat_cols).reset_index(drop=True)
@@ -239,20 +288,24 @@ class AbdBase:
 
         return train, test
 
-    def CIBMTR_score(self, solution: pd.DataFrame, submission: pd.DataFrame, row_id_column_name: str) -> float:
+    def CIBMTR_score(
+        self, solution: pd.DataFrame, submission: pd.DataFrame, row_id_column_name: str
+    ) -> float:
 
         del solution[row_id_column_name]
         del submission[row_id_column_name]
 
-        event_label = 'efs'
-        interval_label = 'efs_time'
-        prediction_label = 'prediction'
+        event_label = "efs"
+        interval_label = "efs_time"
+        prediction_label = "prediction"
         for col in submission.columns:
             if not pandas.api.types.is_numeric_dtype(submission[col]):
-                raise ParticipantVisibleError(f'Submission column {col} must be a number')
+                raise ParticipantVisibleError(
+                    f"Submission column {col} must be a number"
+                )
         merged_df = pd.concat([solution, submission], axis=1)
         merged_df.reset_index(inplace=True)
-        merged_df_race_dict = dict(merged_df.groupby(['race_group']).groups)
+        merged_df_race_dict = dict(merged_df.groupby(["race_group"]).groups)
         metric_list = []
         for race in merged_df_race_dict.keys():
             indices = sorted(merged_df_race_dict[race])
@@ -260,39 +313,56 @@ class AbdBase:
             c_index_race = concordance_index(
                 merged_df_race[interval_label],
                 -merged_df_race[prediction_label],
-                merged_df_race[event_label])
+                merged_df_race[event_label],
+            )
             metric_list.append(c_index_race)
         return float(np.mean(metric_list) - np.sqrt(np.var(metric_list)))
 
     @staticmethod
     def text_stat(df, txt_cols):
-        stop_words = set(stopwords.words('english'))
+        stop_words = set(stopwords.words("english"))
         for col in tqdm(txt_cols, desc="Processing text columns"):
             if col not in df.columns:
                 print(f"Warning: Column '{col}' not found in DataFrame.")
                 continue
 
             df[col] = df[col].fillna("")
-            df[f'{col}_length'] = df[col].str.len()
-            df[f'{col}_word_count'] = df[col].str.split().str.len()
-            df[f'{col}_char_count'] = df[col].apply(lambda x: sum(len(word) for word in x.split()))
-            df[f'{col}_avg_word_length'] = df[f'{col}_char_count'] / df[f'{col}_word_count'].replace(0, 1)
+            df[f"{col}_length"] = df[col].str.len()
+            df[f"{col}_word_count"] = df[col].str.split().str.len()
+            df[f"{col}_char_count"] = df[col].apply(
+                lambda x: sum(len(word) for word in x.split())
+            )
+            df[f"{col}_avg_word_length"] = df[f"{col}_char_count"] / df[
+                f"{col}_word_count"
+            ].replace(0, 1)
 
-            df[f'{col}_punctuation_count'] = df[col].apply(lambda x: sum(1 for char in x if char in string.punctuation))
-            df[f'{col}_capitalized_count'] = df[col].apply(lambda x: sum(1 for word in x.split() if word.isupper()))
-            df[f'{col}_special_char_count'] = df[col].apply(
-                lambda x: sum(1 for char in x if not char.isalnum() and not char.isspace()))
-            df[f'{col}_stopwords_count'] = df[col].apply(
-                lambda x: sum(1 for word in x.split() if word.lower() in stop_words))
+            df[f"{col}_punctuation_count"] = df[col].apply(
+                lambda x: sum(1 for char in x if char in string.punctuation)
+            )
+            df[f"{col}_capitalized_count"] = df[col].apply(
+                lambda x: sum(1 for word in x.split() if word.isupper())
+            )
+            df[f"{col}_special_char_count"] = df[col].apply(
+                lambda x: sum(
+                    1 for char in x if not char.isalnum() and not char.isspace()
+                )
+            )
+            df[f"{col}_stopwords_count"] = df[col].apply(
+                lambda x: sum(1 for word in x.split() if word.lower() in stop_words)
+            )
 
-            df[f'{col}_unique_word_count'] = df[col].apply(lambda x: len(set(x.split())))
-            df[f'{col}_lexical_diversity'] = df[f'{col}_unique_word_count'] / df[f'{col}_word_count'].replace(0, 1)
+            df[f"{col}_unique_word_count"] = df[col].apply(
+                lambda x: len(set(x.split()))
+            )
+            df[f"{col}_lexical_diversity"] = df[f"{col}_unique_word_count"] / df[
+                f"{col}_word_count"
+            ].replace(0, 1)
 
         return df
 
     @staticmethod
     def apply_tfidf_svd(df, text_column, max_features=1000, n_components=10):
-        vectorizer = TfidfVectorizer(max_features=max_features, stop_words='english')
+        vectorizer = TfidfVectorizer(max_features=max_features, stop_words="english")
         vectors = vectorizer.fit_transform(df[text_column])
         svd = TruncatedSVD(n_components)
         x_sv = svd.fit_transform(vectors)
@@ -305,7 +375,7 @@ class AbdBase:
         return df
 
     @staticmethod
-    def tf_fe(train, test, text_columns, max_features=3000, analyzer='char_wb'):
+    def tf_fe(train, test, text_columns, max_features=3000, analyzer="char_wb"):
 
         train_features = []
         test_features = []
@@ -316,10 +386,14 @@ class AbdBase:
             vectorizer = TfidfVectorizer(analyzer=analyzer, max_features=max_features)
             train_tfidf_col = vectorizer.fit_transform(train[col])
             test_tfidf_col = vectorizer.transform(test[col])
-            train_tfidf_col = pd.DataFrame(train_tfidf_col.toarray(),
-                                           columns=[f"tfidf_{col}_{i}" for i in range(train_tfidf_col.shape[1])])
-            test_tfidf_col = pd.DataFrame(test_tfidf_col.toarray(),
-                                          columns=[f"tfidf_{col}_{i}" for i in range(test_tfidf_col.shape[1])])
+            train_tfidf_col = pd.DataFrame(
+                train_tfidf_col.toarray(),
+                columns=[f"tfidf_{col}_{i}" for i in range(train_tfidf_col.shape[1])],
+            )
+            test_tfidf_col = pd.DataFrame(
+                test_tfidf_col.toarray(),
+                columns=[f"tfidf_{col}_{i}" for i in range(test_tfidf_col.shape[1])],
+            )
             train_features.append(train_tfidf_col)
             test_features.append(test_tfidf_col)
 
@@ -329,23 +403,40 @@ class AbdBase:
         return train_with_tfidf, test_with_tfidf
 
     def checkTarget(self):
-        if self.train_data[self.target_column].dtype == 'object':
-            raise ValueError('Encode Target First')
+        if self.train_data[self.target_column].dtype == "object":
+            raise ValueError("Encode Target First")
 
     def _display_initial_info(self):
         print(Fore.RED + f"*** AbdBase {self.current_version} ***\n")
         print(Fore.RED + " *** Available Settings *** \n")
-        print(Fore.RED + "Available Models:", ", ".join([Fore.CYAN + model for model in self.model_name]))
-        print(Fore.RED + "Available Metrics:", ", ".join([Fore.CYAN + metric for metric in self.metrics]))
-        print(Fore.RED + "Available Problem Types:", ", ".join([Fore.CYAN + problem for problem in self.problem_types]))
-        print(Fore.RED + "Available Fold Types:", ", ".join([Fore.CYAN + fold for fold in self.cv_types]))
+        print(
+            Fore.RED + "Available Models:",
+            ", ".join([Fore.CYAN + model for model in self.model_name]),
+        )
+        print(
+            Fore.RED + "Available Metrics:",
+            ", ".join([Fore.CYAN + metric for metric in self.metrics]),
+        )
+        print(
+            Fore.RED + "Available Problem Types:",
+            ", ".join([Fore.CYAN + problem for problem in self.problem_types]),
+        )
+        print(
+            Fore.RED + "Available Fold Types:",
+            ", ".join([Fore.CYAN + fold for fold in self.cv_types]),
+        )
 
         print(Fore.RED + "\n *** Configuration *** \n")
-        print(Fore.RED + f"Problem Type Selected: {Fore.CYAN + self.problem_type.upper()}")
+        print(
+            Fore.RED + f"Problem Type Selected: {Fore.CYAN + self.problem_type.upper()}"
+        )
         print(Fore.RED + f"Metric Selected: {Fore.CYAN + self.metric.upper()}")
         print(Fore.RED + f"Fold Type Selected: {Fore.CYAN + self.fold_type}")
         print(Fore.RED + f"Calculate Train Probabilities: {Fore.CYAN + str(self.prob)}")
-        print(Fore.RED + f"Calculate Test Probabilities: {Fore.CYAN + str(self.test_prob)}")
+        print(
+            Fore.RED
+            + f"Calculate Test Probabilities: {Fore.CYAN + str(self.test_prob)}"
+        )
         print(Fore.RED + f"Early Stopping: {Fore.CYAN + str(self.early_stop)}")
         print(Fore.RED + f"GPU: {Fore.CYAN + str(self.gpu)}")
 
@@ -355,20 +446,22 @@ class AbdBase:
         if self.test_data is not None and not isinstance(self.test_data, pd.DataFrame):
             raise ValueError("Test data must be a pandas DataFrame.")
         if self.target_column not in self.train_data.columns:
-            raise ValueError(f"Target column '{self.target_column}' not found in the training dataset.")
+            raise ValueError(
+                f"Target column '{self.target_column}' not found in the training dataset."
+            )
         if self.problem_type not in self.problem_types:
-            raise ValueError("Invalid problem type. Choose either 'classification' or 'regression'.")
-        if self.metric not in self.metrics and self.metric not in self.regression_metrics:
+            raise ValueError(
+                "Invalid problem type. Choose either 'classification' or 'regression'."
+            )
+        if (
+            self.metric not in self.metrics
+            and self.metric not in self.regression_metrics
+        ):
             raise ValueError("Invalid metric. Choose from available metrics.")
         if not isinstance(self.n_splits, int) or self.n_splits < 2:
             raise ValueError("n_splits must be an integer greater than 1.")
         if self.fold_type not in self.cv_types:
             raise ValueError(f"Invalid fold type. Choose from {self.cv_types}.")
-
-    from sklearn.metrics import (
-        roc_auc_score, accuracy_score, f1_score, precision_score, recall_score,
-        mean_absolute_error, r2_score, mean_squared_error
-    )
 
     def weighted_mean_absolute_error(self, y_true, y_pred, weights):
         return np.sum(weights * np.abs(y_true - y_pred)) / np.sum(weights)
@@ -378,82 +471,131 @@ class AbdBase:
         return np.sqrt(mean_squared_log_error(y_true, y_pred))
 
     def get_metric(self, y_true, y_pred, weights=None):
-        if self.metric == 'roc_auc':
-            return roc_auc_score(y_true, y_pred, multi_class="ovr" if self.num_classes > 2 else None)
-        elif self.metric == 'accuracy':
+        if self.metric == "roc_auc":
+            return roc_auc_score(
+                y_true, y_pred, multi_class="ovr" if self.num_classes > 2 else None
+            )
+        elif self.metric == "accuracy":
             return accuracy_score(y_true, y_pred.round())
-        elif self.metric == 'f1':
-            return f1_score(y_true, y_pred.round(), average='weighted') if self.num_classes > 2 else f1_score(y_true,
-                                                                                                              y_pred.round())
-        elif self.metric == 'precision':
-            return precision_score(y_true, y_pred.round(),
-                                   average='weighted') if self.num_classes > 2 else precision_score(y_true,
-                                                                                                    y_pred.round())
-        elif self.metric == 'recall':
-            return recall_score(y_true, y_pred.round(), average='weighted') if self.num_classes > 2 else recall_score(
-                y_true, y_pred.round())
-        elif self.metric == 'mae':
+        elif self.metric == "f1":
+            return (
+                f1_score(y_true, y_pred.round(), average="weighted")
+                if self.num_classes > 2
+                else f1_score(y_true, y_pred.round())
+            )
+        elif self.metric == "precision":
+            return (
+                precision_score(y_true, y_pred.round(), average="weighted")
+                if self.num_classes > 2
+                else precision_score(y_true, y_pred.round())
+            )
+        elif self.metric == "recall":
+            return (
+                recall_score(y_true, y_pred.round(), average="weighted")
+                if self.num_classes > 2
+                else recall_score(y_true, y_pred.round())
+            )
+        elif self.metric == "mae":
             return mean_absolute_error(y_true, y_pred)
-        elif self.metric == 'r2':
+        elif self.metric == "r2":
             return r2_score(y_true, y_pred)
-        elif self.metric == 'rmse':
+        elif self.metric == "rmse":
             return mean_squared_error(y_true, y_pred, squared=False)
-        elif self.metric == 'wmae' and weights is not None:
+        elif self.metric == "wmae" and weights is not None:
             return self.weighted_mean_absolute_error(y_true, y_pred, weights)
-        elif self.metric == 'rmsle':
+        elif self.metric == "rmsle":
             return self.rmsLe(y_true, y_pred)
-        elif self.metric == 'mse':
+        elif self.metric == "mse":
             return mean_squared_error(y_true, y_pred, squared=True)
         else:
             raise ValueError(f"Unsupported metric '{self.metric}'")
 
-    def Train_ML(self, params, model_name, e_stop=50, estimator=None, g_col=None, tab_net_train_params=None,
-                 optuna=False, V_weights=None, y_log=False):
+    def Train_ML(
+        self,
+        params,
+        model_name,
+        e_stop=50,
+        estimator=None,
+        g_col=None,
+        tab_net_train_params=None,
+        optuna=False,
+        V_weights=None,
+        y_log=False,
+    ):
         print(f"The EarlyStopping is {e_stop}") if optuna == False else None
         if self.metric not in self.metrics:
-            raise ValueError(f"Metric '{self.metric}' is not supported. Choose from Given Metrics.")
+            raise ValueError(
+                f"Metric '{self.metric}' is not supported. Choose from Given Metrics."
+            )
         if self.problem_type not in self.problem_types:
             raise ValueError(
-                f"Problem type '{self.problem_type}' is not supported. Choose from: 'classification', 'regression'.")
+                f"Problem type '{self.problem_type}' is not supported. Choose from: 'classification', 'regression'."
+            )
 
-        if self.fold_type == 'SKF':
-            kfold = StratifiedKFold(n_splits=self.n_splits, shuffle=True, random_state=self.seed)
-        elif self.fold_type == 'KF':
+        if self.fold_type == "SKF":
+            kfold = StratifiedKFold(
+                n_splits=self.n_splits, shuffle=True, random_state=self.seed
+            )
+        elif self.fold_type == "KF":
             kfold = KFold(n_splits=self.n_splits, shuffle=True, random_state=self.seed)
-        elif self.fold_type == 'GKF':
+        elif self.fold_type == "GKF":
             kfold = GroupKFold(n_splits=self.n_splits)
-        elif self.fold_type == 'RKF':
-            kfold = RepeatedKFold(n_splits=self.n_splits, n_repeats=1, random_state=self.seed)
+        elif self.fold_type == "RKF":
+            kfold = RepeatedKFold(
+                n_splits=self.n_splits, n_repeats=1, random_state=self.seed
+            )
         else:
             raise NotImplementedError("Select the Given Cv Statergy")
 
         train_scores = []
         oof_scores = []
         all_models = []
-        oof_predictions = np.zeros((len(self.y_train), self.num_classes)) if self.num_classes > 2 else np.zeros(
-            len(self.y_train))
+        oof_predictions = (
+            np.zeros((len(self.y_train), self.num_classes))
+            if self.num_classes > 2
+            else np.zeros(len(self.y_train))
+        )
         test_preds = (
-            None if self.X_test is None else
-            np.zeros((len(self.X_test), self.n_splits, self.num_classes)) if self.num_classes > 2 else
-            np.zeros((len(self.X_test), self.n_splits))
+            None
+            if self.X_test is None
+            else (
+                np.zeros((len(self.X_test), self.n_splits, self.num_classes))
+                if self.num_classes > 2
+                else np.zeros((len(self.X_test), self.n_splits))
+            )
         )
 
-        cat_features_indices = [self.X_train.columns.get_loc(col) for col in
-                                self.cat_features] if model_name == 'CAT' else None
+        cat_features_indices = (
+            [self.X_train.columns.get_loc(col) for col in self.cat_features]
+            if model_name == "CAT"
+            else None
+        )
 
         for fold, (train_idx, val_idx) in enumerate(
-                tqdm(kfold.split(self.X_train, self.y_train) if self.fold_type != 'GKF' else kfold.split(self.X_train,
-                                                                                                         self.y_train,
-                                                                                                         groups=
-                                                                                                         self.X_train[
-                                                                                                             g_col])
-                        , desc="Training Folds", total=self.n_splits)):
+            tqdm(
+                (
+                    kfold.split(self.X_train, self.y_train)
+                    if self.fold_type != "GKF"
+                    else kfold.split(
+                        self.X_train, self.y_train, groups=self.X_train[g_col]
+                    )
+                ),
+                desc="Training Folds",
+                total=self.n_splits,
+            )
+        ):
             if self.numpy_data:
                 X_train, X_val = self.X_train[train_idx], self.X_train[val_idx]
                 y_train, y_val = self.y_train[train_idx], self.y_train[val_idx]
             else:
-                X_train, X_val = self.X_train.iloc[train_idx], self.X_train.iloc[val_idx]
-                y_train, y_val = self.y_train.iloc[train_idx], self.y_train.iloc[val_idx]
+                X_train, X_val = (
+                    self.X_train.iloc[train_idx],
+                    self.X_train.iloc[val_idx],
+                )
+                y_train, y_val = (
+                    self.y_train.iloc[train_idx],
+                    self.y_train.iloc[val_idx],
+                )
 
             if y_log:
                 y_train = np.log1p(y_train)
@@ -461,60 +603,143 @@ class AbdBase:
 
             # Sample The Test Weights
             def distribute_test_weights(test_sample_size, weights):
-                repeated_weights = np.tile(weights, int(np.ceil(test_sample_size / len(weights))))[:test_sample_size]
+                repeated_weights = np.tile(
+                    weights, int(np.ceil(test_sample_size / len(weights)))
+                )[:test_sample_size]
                 return repeated_weights
 
             if self.weights is not None:
                 #                 train_weights, val_weights = self.weights.iloc[train_idx], self.weights.iloc[val_idx]
-                val_weights = distribute_test_weights(len(y_val),
-                                                      self.weights)  # If Test Weights are Less || Sample Thm
+                val_weights = distribute_test_weights(
+                    len(y_val), self.weights
+                )  # If Test Weights are Less || Sample Thm
                 train_weights = np.ones(len(y_train))  # If Train Weights are None
 
-            if model_name == 'LGBM':
-                model = lgb.LGBMClassifier(**params, random_state=self.seed, verbose=-1,
-                                           device='gpu' if self.gpu else 'cpu') if self.problem_type == 'classification' else lgb.LGBMRegressor(
-                    **params, random_state=self.seed, verbose=-1,
-                    device='gpu' if self.gpu else 'cpu')
-            elif model_name == 'TABNET':
-                model = TabNetClassifier(**params, seed=self.seed, verbose=-1,
-                                         device_name='gpu' if self.gpu else 'cpu') if self.problem_type == 'classification' else TabNetRegressor(
-                    **params, seed=self.seed, verbose=-1,
-                    device_name='gpu' if self.gpu else 'cpu')
-            elif model_name == 'XGB':
-                model = XGBClassifier(**params, random_state=self.seed, verbose=-1,
-                                      tree_method='gpu_hist' if self.gpu else 'hist') if self.problem_type == 'classification' else XGBRegressor(
-                    **params, random_state=self.seed, verbose=-1,
-                    tree_method='gpu_hist' if self.gpu else 'hist')
-            elif model_name == 'CAT':
-                train_pool = Pool(data=X_train, label=y_train, cat_features=cat_features_indices)
-                val_pool = Pool(data=X_val, label=y_val, cat_features=cat_features_indices)
-                model = CatBoostClassifier(**params, random_state=self.seed, verbose=0,
-                                           task_type='GPU' if self.gpu else 'CPU') if self.problem_type == 'classification' else CatBoostRegressor(
-                    **params, random_state=self.seed, verbose=0,
-                    task_type='GPU' if self.gpu else 'CPU')
-            elif model_name == 'Voting':
-                model = VotingClassifier(estimators=estimator,
-                                         weights=V_weights if V_weights is not None else None) if self.problem_type == 'classification' else VotingRegressor(
-                    estimators=estimator, weights=V_weights if V_weights is not None else None)
+            if model_name == "LGBM":
+                model = (
+                    lgb.LGBMClassifier(
+                        **params,
+                        random_state=self.seed,
+                        verbose=-1,
+                        device="gpu" if self.gpu else "cpu",
+                    )
+                    if self.problem_type == "classification"
+                    else lgb.LGBMRegressor(
+                        **params,
+                        random_state=self.seed,
+                        verbose=-1,
+                        device="gpu" if self.gpu else "cpu",
+                    )
+                )
+            elif model_name == "TABNET":
+                model = (
+                    TabNetClassifier(
+                        **params,
+                        seed=self.seed,
+                        verbose=-1,
+                        device_name="gpu" if self.gpu else "cpu",
+                    )
+                    if self.problem_type == "classification"
+                    else TabNetRegressor(
+                        **params,
+                        seed=self.seed,
+                        verbose=-1,
+                        device_name="gpu" if self.gpu else "cpu",
+                    )
+                )
+            elif model_name == "XGB":
+                model = (
+                    XGBClassifier(
+                        **params,
+                        random_state=self.seed,
+                        verbose=-1,
+                        tree_method="gpu_hist" if self.gpu else "hist",
+                    )
+                    if self.problem_type == "classification"
+                    else XGBRegressor(
+                        **params,
+                        random_state=self.seed,
+                        verbose=-1,
+                        tree_method="gpu_hist" if self.gpu else "hist",
+                    )
+                )
+            elif model_name == "CAT":
+                train_pool = Pool(
+                    data=X_train, label=y_train, cat_features=cat_features_indices
+                )
+                val_pool = Pool(
+                    data=X_val, label=y_val, cat_features=cat_features_indices
+                )
+                model = (
+                    CatBoostClassifier(
+                        **params,
+                        random_state=self.seed,
+                        verbose=0,
+                        task_type="GPU" if self.gpu else "CPU",
+                    )
+                    if self.problem_type == "classification"
+                    else CatBoostRegressor(
+                        **params,
+                        random_state=self.seed,
+                        verbose=0,
+                        task_type="GPU" if self.gpu else "CPU",
+                    )
+                )
+            elif model_name == "Voting":
+                model = (
+                    VotingClassifier(
+                        estimators=estimator,
+                        weights=V_weights if V_weights is not None else None,
+                    )
+                    if self.problem_type == "classification"
+                    else VotingRegressor(
+                        estimators=estimator,
+                        weights=V_weights if V_weights is not None else None,
+                    )
+                )
             else:
                 raise ValueError("model_name must be 'LGBM' or 'CAT'.")
 
             callbacks = [early_stopping(stopping_rounds=e_stop, verbose=False)]
-            if model_name == 'LGBM':
-                model.fit(X_train, y_train, eval_set=[(X_val, y_val)], callbacks=callbacks if self.early_stop else None)
-            if model_name == 'TABNET':
-                model.fit(X_train, y_train, eval_set=[(X_val, y_val)], **tab_net_train_params)
-            elif model_name == 'XGB':
-                model.fit(X_train, y_train, eval_set=[(X_val, y_val)],
-                          early_stopping_rounds=e_stop if self.early_stop else None, verbose=False)
-            elif model_name == 'CAT':
-                model.fit(train_pool, eval_set=val_pool, early_stopping_rounds=e_stop if self.early_stop else None)
-            elif model_name == 'Voting':
+            if model_name == "LGBM":
+                model.fit(
+                    X_train,
+                    y_train,
+                    eval_set=[(X_val, y_val)],
+                    callbacks=callbacks if self.early_stop else None,
+                )
+            if model_name == "TABNET":
+                model.fit(
+                    X_train, y_train, eval_set=[(X_val, y_val)], **tab_net_train_params
+                )
+            elif model_name == "XGB":
+                model.fit(
+                    X_train,
+                    y_train,
+                    eval_set=[(X_val, y_val)],
+                    early_stopping_rounds=e_stop if self.early_stop else None,
+                    verbose=False,
+                )
+            elif model_name == "CAT":
+                model.fit(
+                    train_pool,
+                    eval_set=val_pool,
+                    early_stopping_rounds=e_stop if self.early_stop else None,
+                )
+            elif model_name == "Voting":
                 model.fit(X_train, y_train)
 
-            if self.problem_type == 'classification':
-                y_train_pred = model.predict_proba(X_train)[:, 1] if self.prob else model.predict(X_train)
-                y_val_pred = model.predict_proba(X_val)[:, 1] if self.prob else model.predict(X_val)
+            if self.problem_type == "classification":
+                y_train_pred = (
+                    model.predict_proba(X_train)[:, 1]
+                    if self.prob
+                    else model.predict(X_train)
+                )
+                y_val_pred = (
+                    model.predict_proba(X_val)[:, 1]
+                    if self.prob
+                    else model.predict(X_val)
+                )
             else:
                 y_train_pred = model.predict(X_train)
                 y_val_pred = model.predict(X_val)
@@ -528,18 +753,46 @@ class AbdBase:
             oof_predictions[val_idx] = y_val_pred
 
             if self.metric == "accuracy":
-                train_scores.append(accuracy_score(y_train,
-                                                   np.argmax(y_train_pred, axis=1) if self.num_classes > 2 else (
-                                                               y_train_pred > 0.5).astype(int)))
-                oof_scores.append(accuracy_score(y_val, np.argmax(y_val_pred, axis=1) if self.num_classes > 2 else (
-                            y_val_pred > 0.5).astype(int)))
+                train_scores.append(
+                    accuracy_score(
+                        y_train,
+                        (
+                            np.argmax(y_train_pred, axis=1)
+                            if self.num_classes > 2
+                            else (y_train_pred > 0.5).astype(int)
+                        ),
+                    )
+                )
+                oof_scores.append(
+                    accuracy_score(
+                        y_val,
+                        (
+                            np.argmax(y_val_pred, axis=1)
+                            if self.num_classes > 2
+                            else (y_val_pred > 0.5).astype(int)
+                        ),
+                    )
+                )
             elif self.metric == "roc_auc":
                 train_scores.append(
-                    roc_auc_score(y_train, y_train_pred, multi_class="ovr" if self.num_classes > 2 else None))
-                oof_scores.append(roc_auc_score(y_val, y_val_pred, multi_class="ovr" if self.num_classes > 2 else None))
+                    roc_auc_score(
+                        y_train,
+                        y_train_pred,
+                        multi_class="ovr" if self.num_classes > 2 else None,
+                    )
+                )
+                oof_scores.append(
+                    roc_auc_score(
+                        y_val,
+                        y_val_pred,
+                        multi_class="ovr" if self.num_classes > 2 else None,
+                    )
+                )
 
-            elif self.metric == 'wmae' and self.weights is not None:
-                train_scores.append(self.get_metric(y_train, y_train_pred, train_weights))
+            elif self.metric == "wmae" and self.weights is not None:
+                train_scores.append(
+                    self.get_metric(y_train, y_train_pred, train_weights)
+                )
                 oof_scores.append(self.get_metric(y_val, y_val_pred, val_weights))
 
             else:
@@ -547,32 +800,55 @@ class AbdBase:
                 oof_scores.append(self.get_metric(y_val, y_val_pred))
 
             if self.X_test is not None:
-                if self.problem_type == 'classification':
-                    test_preds[:, fold] = model.predict_proba(self.X_test)[:, 1] if self.test_prob else model.predict(
-                        self.X_test)
-                elif model_name == 'TABNET':
+                if self.problem_type == "classification":
+                    test_preds[:, fold] = (
+                        model.predict_proba(self.X_test)[:, 1]
+                        if self.test_prob
+                        else model.predict(self.X_test)
+                    )
+                elif model_name == "TABNET":
                     pred = model.predict(self.X_test)
                     test_preds[:, fold] = pred.squeeze()
                 else:
                     test_preds[:, fold] = model.predict(self.X_test)
 
-            print(
-                f"Fold {fold + 1} - Train {self.metric.upper()}: {train_scores[-1]:.4f}, OOF {self.metric.upper()}: {oof_scores[-1]:.4f}") if optuna == False else None
+            (
+                print(
+                    f"Fold {fold + 1} - Train {self.metric.upper()}: {train_scores[-1]:.4f}, OOF {self.metric.upper()}: {oof_scores[-1]:.4f}"
+                )
+                if optuna == False
+                else None
+            )
             all_models.append(model)
             # clear_output(wait=True) if optuna == False else None
 
         mean_train_scores = f"{np.mean(train_scores):.4f}"
         mean_off_scores = f"{np.mean(oof_scores):.4f}"
 
-        print(f"Overall Train {self.metric.upper()}: {mean_train_scores}") if optuna == False else None
-        print(f"Overall OOF {self.metric.upper()}: {mean_off_scores} ") if optuna == False else None
+        (
+            print(f"Overall Train {self.metric.upper()}: {mean_train_scores}")
+            if optuna == False
+            else None
+        )
+        (
+            print(f"Overall OOF {self.metric.upper()}: {mean_off_scores} ")
+            if optuna == False
+            else None
+        )
 
         mean_test_preds = test_preds.mean(axis=1) if self.X_test is not None else None
 
         if y_log:
             mean_test_preds = np.expm1(mean_test_preds)
 
-        return oof_predictions, mean_test_preds, model, all_models, mean_off_scores, mean_train_scores
+        return (
+            oof_predictions,
+            mean_test_preds,
+            model,
+            all_models,
+            mean_off_scores,
+            mean_train_scores,
+        )
 
     def _setup_default_logger(self) -> logging.Logger:
         logger = logging.getLogger(self.__class__.__name__)
@@ -582,51 +858,72 @@ class AbdBase:
             logger.handlers.clear()
 
         handler = logging.StreamHandler()
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
         handler.setFormatter(formatter)
         logger.addHandler(handler)
         return logger
 
     def RUN_OPTUNA(
-            self, MODEL_NAME: str, PARAMS: Dict[str, Any], DIRECTION: str = 'minimize',
-            TRIALS: int = 10, SEED: int = 42, ENABLE_PRUNER: bool = False,
-            PRUNER_PARAMS: Optional[Dict[str, Any]] = None, y_log: bool = False) -> Dict[str, Any]:
+        self,
+        MODEL_NAME: str,
+        PARAMS: Dict[str, Any],
+        DIRECTION: str = "minimize",
+        TRIALS: int = 10,
+        SEED: int = 42,
+        ENABLE_PRUNER: bool = False,
+        PRUNER_PARAMS: Optional[Dict[str, Any]] = None,
+        y_log: bool = False,
+    ) -> Dict[str, Any]:
 
         sampler = optuna.samplers.TPESampler(seed=SEED)
 
         pruner = None
         if ENABLE_PRUNER:
             pruner_config = PRUNER_PARAMS or {
-                'n_startup_trials': 5,
-                'n_warmup_steps': 3,
-                'n_valid_steps': 3
+                "n_startup_trials": 5,
+                "n_warmup_steps": 3,
+                "n_valid_steps": 3,
             }
             pruner = optuna.pruners.MedianPruner(**pruner_config)
 
         study = optuna.create_study(sampler=sampler, direction=DIRECTION, pruner=pruner)
 
-        best_scores = {'train_score': None, 'val_score': None}
+        best_scores = {"train_score": None, "val_score": None}
 
         def objective(trial):
-            train_score, val_score = self.OPTUNE_TRAIN(trial, MODEL_NAME=MODEL_NAME, PARAMS=PARAMS, y_log=y_log)
+            train_score, val_score = self.OPTUNE_TRAIN(
+                trial, MODEL_NAME=MODEL_NAME, PARAMS=PARAMS, y_log=y_log
+            )
 
-            if best_scores['val_score'] is None or (
-                    (DIRECTION == 'minimize' and val_score < best_scores['val_score']) or
-                    (DIRECTION == 'maximize' and val_score > best_scores['val_score'])
+            if best_scores["val_score"] is None or (
+                (DIRECTION == "minimize" and val_score < best_scores["val_score"])
+                or (DIRECTION == "maximize" and val_score > best_scores["val_score"])
             ):
-                best_scores['train_score'] = train_score
-                best_scores['val_score'] = val_score
+                best_scores["train_score"] = train_score
+                best_scores["val_score"] = val_score
 
             return val_score
 
         try:
             study.optimize(objective, n_trials=TRIALS)
 
-            self.logger.info(Fore.RED + f"--> Best Train Score for {MODEL_NAME}: " +
-                             Fore.CYAN + f"{best_scores['train_score']:.4f}")
-            self.logger.info(Fore.RED + f"--> Best Validation Score for {MODEL_NAME}: " +
-                             Fore.CYAN + f"{best_scores['val_score']:.4f}")
-            self.logger.info(Fore.RED + f"--> Best Parameters: " + Fore.CYAN + f"{study.best_params}")
+            self.logger.info(
+                Fore.RED
+                + f"--> Best Train Score for {MODEL_NAME}: "
+                + Fore.CYAN
+                + f"{best_scores['train_score']:.4f}"
+            )
+            self.logger.info(
+                Fore.RED
+                + f"--> Best Validation Score for {MODEL_NAME}: "
+                + Fore.CYAN
+                + f"{best_scores['val_score']:.4f}"
+            )
+            self.logger.info(
+                Fore.RED + f"--> Best Parameters: " + Fore.CYAN + f"{study.best_params}"
+            )
 
             return study
 
@@ -634,9 +931,16 @@ class AbdBase:
             self.logger.error(f"Optuna Optimization Failed: {str(e)}")
             raise
 
-    def OPTUNE_TRAIN(self, trial: optuna.trial.Trial, MODEL_NAME: str = "", optuna=True,
-                     PARAMS: Optional[Dict[str, Union[Tuple[Union[int, float], Union[int, float]], Any]]] = None,
-                     y_log: bool = False) -> Tuple[float, float]:
+    def OPTUNE_TRAIN(
+        self,
+        trial: optuna.trial.Trial,
+        MODEL_NAME: str = "",
+        optuna=True,
+        PARAMS: Optional[
+            Dict[str, Union[Tuple[Union[int, float], Union[int, float]], Any]]
+        ] = None,
+        y_log: bool = False,
+    ) -> Tuple[float, float]:
 
         params = PARAMS.copy() if PARAMS else {}
 
@@ -646,14 +950,24 @@ class AbdBase:
                     if isinstance(value[0], int):
                         params[param] = trial.suggest_int(param, value[0], value[1])
                     elif isinstance(value[0], float):
-                        params[param] = trial.suggest_float(param, value[0], value[1], log=True)
+                        params[param] = trial.suggest_float(
+                            param, value[0], value[1], log=True
+                        )
             except Exception as e:
                 self.logger.error(f"Error suggesting parameter {param}: {e}")
                 raise
 
         try:
-            result = self.Train_ML(params=params, model_name=MODEL_NAME, e_stop=40, estimator=None,
-                                   g_col=None, tab_net_train_params=None, optuna=optuna, y_log=y_log)
+            result = self.Train_ML(
+                params=params,
+                model_name=MODEL_NAME,
+                e_stop=40,
+                estimator=None,
+                g_col=None,
+                tab_net_train_params=None,
+                optuna=optuna,
+                y_log=y_log,
+            )
 
             test_score = result[4]
             train_score = result[5]
@@ -662,7 +976,9 @@ class AbdBase:
                 train_score = float(train_score)
                 return train_score, test_score
             except ValueError as e:
-                raise ValueError(f"Score '{test_score}' and {train_score} is not a valid float. Original error: {e}")
+                raise ValueError(
+                    f"Score '{test_score}' and {train_score} is not a valid float. Original error: {e}"
+                )
 
         except Exception as e:
             self.logger.error(f"Training failed for {MODEL_NAME}: {e}")

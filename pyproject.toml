@@ -5,12 +5,9 @@ description = "Coursework of Advanced Machine Learning, towards the WSDM Cup - M
 authors = [{ name = "Cylix Lee", email = "cylix.lee@outlook.com" }]
 dependencies = [
     "numpy>=1.26.4",
-    "polars>=1.17.1",
     "pandas[feather,parquet]>=2.2.3",
     "optuna>=4.1.0",
     "tqdm>=4.67.1",
-    "category-encoders>=2.6.4",
-    "scipy>=1.14.1",
     "nltk>=3.9.1",
     "lightgbm>=4.5.0",
     "catboost>=1.2.7",
