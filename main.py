@@ -51,7 +51,13 @@ a configuration is adopted and those paths can be switched conveniently.
 import toml
 
 CONFIG = toml.load("environment-settings.toml")
-PATHS = CONFIG["paths"][CONFIG["paths"]["adopted"]]
+PATHS = None
+for configuration in CONFIG["paths"]["configurations"]:
+    if configuration["name"] == CONFIG["paths"]["enabled"]:
+        PATHS = configuration
+        break
+assert PATHS is not None, "invalid paths configuration"
+
 
 train = pd.read_parquet(PATHS["train"])
 test = pd.read_parquet(PATHS["test"])

@@ -1,12 +1,14 @@
-[paths]
-adopted = "local"
+[path]
+enabled = "local"
 
-[paths.local]
+[[path.configurations]]
+name = "local"
 train = "data/train.parquet"
 test = "data/test.parquet"
 sample = "data/sample_submission.csv"
 
-[paths.kaggle]
+[[path.configurations]]
+name = "kaggle"
 train = "/kaggle/input/wsdm-cup-multilingual-chatbot-arena/train.parquet"
 test = "/kaggle/input/wsdm-cup-multilingual-chatbot-arena/test.parquet"
 sample = "/kaggle/input/wsdm-cup-multilingual-chatbot-arena/sample_submission.csv"
