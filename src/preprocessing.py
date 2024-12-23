@@ -270,33 +270,11 @@ ComputeSentenceLengthMax = _column_pipeline_of(_sentence_length_max)
 ComputeSentenceLengthMin = _column_pipeline_of(_sentence_length_min)
 
 
-def _column_pipeline_subtract(new: str, minuend: str, subtractor: str):
-    class Pipeline(ColumnPreprocessPipeline):
-        def __call__(self, frame: pd.DataFrame, column: str) -> pd.DataFrame:
-            frame[f"{column}_{new}"] = (
-                frame[f"{column}_{minuend}"] - frame[f"{column}_{subtractor}"]
-            )
-            return frame
-
-    return Pipeline
-
-
 def _column_pipeline_divide(new: str, numerator: str, denominator: str):
     class Pipeline(ColumnPreprocessPipeline):
         def __call__(self, frame: pd.DataFrame, column: str) -> pd.DataFrame:
             frame[f"{column}_{new}"] = (
                 frame[f"{column}_{numerator}"] / frame[f"{column}_{denominator}"]
-            )
-            return frame
-
-    return Pipeline
-
-
-def _column_pipeline_divide_floating(new: str, numerator: str, denominator: str):
-    class Pipeline(ColumnPreprocessPipeline):
-        def __call__(self, frame: pd.DataFrame, column: str) -> pd.DataFrame:
-            frame[f"{column}_{new}"] = frame[f"{column}_{numerator}"] / (
-                frame[f"{column}_{denominator}"] + 1e-6
             )
             return frame
 

@@ -39,15 +39,16 @@ def load_and_preprocess() -> tuple[pd.DataFrame, pd.DataFrame]:
         ComputeResponseLengthRatio(),
     )
 
-    preprocess_test = Sequential(
+    preprocess_train = Sequential(
+        MapColumnValues("winner", {"model_a": 0, "model_b": 1}),
         DropColumns("model_a", "model_b", "language", "scored"),
         EnforceDType("id", "category"),
         computation_pipeline,
     )
 
-    preprocess_train = Sequential(
-        MapColumnValues("winner", {"model_a": 0, "model_b": 1}),
-        preprocess_test,
+    preprocess_test = Sequential(
+        DropColumns("model_a", "model_b", "language", "scored"),
+        EnforceDType("id", "category"),
         computation_pipeline,
     )
 
