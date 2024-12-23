@@ -75,82 +75,48 @@ def text_stat(df, txt_col):
     for col in tqdm(txt_col, desc="Processing text columns"):
         df[f"{col}_length"] = df[col].apply(len)
         df[f"{col}_word_count"] = df[col].apply(lambda x: len(x.split()))
-        df[f"{col}_char_count"] = df[col].apply(
-            lambda x: sum([len(word) for word in x.split()])
-        )
+        df[f"{col}_char_count"] = df[col].apply(lambda x: sum([len(word) for word in x.split()]))
         df[f"{col}_avg_word_length"] = df[f"{col}_char_count"] / df[f"{col}_word_count"]
 
-        df[f"{col}_punctuation_count"] = df[col].apply(
-            lambda x: sum([1 for char in x if char in string.punctuation])
-        )
-        df[f"{col}_capitalized_count"] = df[col].apply(
-            lambda x: sum([1 for word in x.split() if word.isupper()])
-        )
+        df[f"{col}_punctuation_count"] = df[col].apply(lambda x: sum([1 for char in x if char in string.punctuation]))
+        df[f"{col}_capitalized_count"] = df[col].apply(lambda x: sum([1 for word in x.split() if word.isupper()]))
         df[f"{col}_special_char_count"] = df[col].apply(
-            lambda x: sum(
-                [1 for char in x if not char.isalnum() and not char.isspace()]
-            )
+            lambda x: sum([1 for char in x if not char.isalnum() and not char.isspace()])
         )
         df[f"{col}_stopwords_count"] = df[col].apply(
             lambda x: len([word for word in x.split() if word.lower() in stop_words])
         )
         df[f"{col}_unique_word_count"] = df[col].apply(lambda x: len(set(x.split())))
-        df[f"{col}_lexical_diversity"] = (
-            df[f"{col}_unique_word_count"] / df[f"{col}_word_count"]
-        )
+        df[f"{col}_lexical_diversity"] = df[f"{col}_unique_word_count"] / df[f"{col}_word_count"]
 
-        df[f"{col}_word_length_mean"] = df[col].apply(
-            lambda x: np.mean([len(word) for word in x.split()])
-        )
-        df[f"{col}_word_length_median"] = df[col].apply(
-            lambda x: np.median([len(word) for word in x.split()])
-        )
-        df[f"{col}_word_length_max"] = df[col].apply(
-            lambda x: max([len(word) for word in x.split()], default=0)
-        )
-        df[f"{col}_word_length_min"] = df[col].apply(
-            lambda x: min([len(word) for word in x.split()], default=0)
-        )
+        df[f"{col}_word_length_mean"] = df[col].apply(lambda x: np.mean([len(word) for word in x.split()]))
+        df[f"{col}_word_length_median"] = df[col].apply(lambda x: np.median([len(word) for word in x.split()]))
+        df[f"{col}_word_length_max"] = df[col].apply(lambda x: max([len(word) for word in x.split()], default=0))
+        df[f"{col}_word_length_min"] = df[col].apply(lambda x: min([len(word) for word in x.split()], default=0))
 
         df[f"{col}_sentence_length_mean"] = df[col].apply(
-            lambda x: np.mean(
-                [len(sentence.split()) for sentence in x.split(".") if sentence.strip()]
-            )
+            lambda x: np.mean([len(sentence.split()) for sentence in x.split(".") if sentence.strip()])
         )
         df[f"{col}_sentence_length_median"] = df[col].apply(
-            lambda x: np.median(
-                [len(sentence.split()) for sentence in x.split(".") if sentence.strip()]
-            )
+            lambda x: np.median([len(sentence.split()) for sentence in x.split(".") if sentence.strip()])
         )
         df[f"{col}_sentence_length_max"] = df[col].apply(
             lambda x: max(
-                [
-                    len(sentence.split())
-                    for sentence in x.split(".")
-                    if sentence.strip()
-                ],
+                [len(sentence.split()) for sentence in x.split(".") if sentence.strip()],
                 default=0,
             )
         )
         df[f"{col}_sentence_length_min"] = df[col].apply(
             lambda x: min(
-                [
-                    len(sentence.split())
-                    for sentence in x.split(".")
-                    if sentence.strip()
-                ],
+                [len(sentence.split()) for sentence in x.split(".") if sentence.strip()],
                 default=0,
             )
         )
 
     df["response_length_diff_a_b"] = df["response_a_length"] - df["response_b_length"]
     df["response_length_diff_b_a"] = df["response_b_length"] - df["response_a_length"]
-    df["response_length_ratio_a_b"] = df["response_a_length"] / (
-        df["response_b_length"] + 1e-6
-    )
-    df["response_length_ratio_b_a"] = df["response_b_length"] / (
-        df["response_a_length"] + 1e-6
-    )
+    df["response_length_ratio_a_b"] = df["response_a_length"] / (df["response_b_length"] + 1e-6)
+    df["response_length_ratio_b_a"] = df["response_b_length"] / (df["response_a_length"] + 1e-6)
 
     return df
 

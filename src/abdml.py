@@ -135,9 +135,7 @@ class AbdBase:
 
         if self.stat_fe:
             print(Fore.YELLOW + f"\nAdding Stats Features")
-            self.txt_columns = stat_fe.get(
-                "txt_columns", txt_columns
-            )  # don't know what this is
+            self.txt_columns = stat_fe.get("txt_columns", txt_columns)  # don't know what this is
 
             if self.train_data is not None:
                 self.train_data = self.text_stat(
@@ -189,10 +187,7 @@ class AbdBase:
             self.text_columns = multi_column_tfidf.get("text_columns", [])
             self.max_features = multi_column_tfidf.get("max_features", 1000)
 
-            print(
-                Fore.YELLOW
-                + f"\nMulti-TF_IDF Processing For Columns: {self.text_columns}"
-            )
+            print(Fore.YELLOW + f"\nMulti-TF_IDF Processing For Columns: {self.text_columns}")
 
             if self.train_data is not None and self.test_data is not None:
                 self.train_data, self.test_data = self.tf_fe(
@@ -208,18 +203,12 @@ class AbdBase:
             else self.train_data.drop(self.target_column, axis=1)
         )
         self.y_train = (
-            self.train_data[self.target_column].to_numpy()
-            if self.numpy_data
-            else self.train_data[self.target_column]
+            self.train_data[self.target_column].to_numpy() if self.numpy_data else self.train_data[self.target_column]
         )
-        self.y_train = (
-            self.y_train.reshape(-1, 1) if self.model_name == "TABNET" else self.y_train
-        )
+        self.y_train = self.y_train.reshape(-1, 1) if self.model_name == "TABNET" else self.y_train
 
         if self.test_data is not None:
-            self.X_test = (
-                self.test_data.to_numpy() if self.numpy_data else self.test_data
-            )
+            self.X_test = self.test_data.to_numpy() if self.numpy_data else self.test_data
         else:
             self.X_test = None
 
@@ -230,17 +219,13 @@ class AbdBase:
         for col in cat_cols:
             le = LabelEncoder()
             train[col] = le.fit_transform(train[col])
-            test[col] = test[col].apply(
-                lambda x: le.transform([x])[0] if x in le.classes_ else -1
-            )
+            test[col] = test[col].apply(lambda x: le.transform([x])[0] if x in le.classes_ else -1)
             label_encoders[col] = le
 
         return train, test
 
     @staticmethod
-    def factorize_and_encode(
-        train: pd.DataFrame, test: pd.DataFrame, cat_cols: list, target_col
-    ) -> pd.DataFrame:
+    def factorize_and_encode(train: pd.DataFrame, test: pd.DataFrame, cat_cols: list, target_col) -> pd.DataFrame:
 
         combined = pd.concat([train, test], axis=0, ignore_index=True)
 
@@ -290,9 +275,7 @@ class AbdBase:
 
         return train, test
 
-    def CIBMTR_score(
-        self, solution: pd.DataFrame, submission: pd.DataFrame, row_id_column_name: str
-    ) -> float:
+    def CIBMTR_score(self, solution: pd.DataFrame, submission: pd.DataFrame, row_id_column_name: str) -> float:
 
         del solution[row_id_column_name]
         del submission[row_id_column_name]
@@ -302,9 +285,7 @@ class AbdBase:
         prediction_label = "prediction"
         for col in submission.columns:
             if not pandas.api.types.is_numeric_dtype(submission[col]):
-                raise ParticipantVisibleError(
-                    f"Submission column {col} must be a number"
-                )
+                raise ParticipantVisibleError(f"Submission column {col} must be a number")
         merged_df = pd.concat([solution, submission], axis=1)
         merged_df.reset_index(inplace=True)
         merged_df_race_dict = dict(merged_df.groupby(["race_group"]).groups)
@@ -331,34 +312,20 @@ class AbdBase:
             df[col] = df[col].fillna("")
             df[f"{col}_length"] = df[col].str.len()
             df[f"{col}_word_count"] = df[col].str.split().str.len()
-            df[f"{col}_char_count"] = df[col].apply(
-                lambda x: sum(len(word) for word in x.split())
-            )
-            df[f"{col}_avg_word_length"] = df[f"{col}_char_count"] / df[
-                f"{col}_word_count"
-            ].replace(0, 1)
+            df[f"{col}_char_count"] = df[col].apply(lambda x: sum(len(word) for word in x.split()))
+            df[f"{col}_avg_word_length"] = df[f"{col}_char_count"] / df[f"{col}_word_count"].replace(0, 1)
 
-            df[f"{col}_punctuation_count"] = df[col].apply(
-                lambda x: sum(1 for char in x if char in string.punctuation)
-            )
-            df[f"{col}_capitalized_count"] = df[col].apply(
-                lambda x: sum(1 for word in x.split() if word.isupper())
-            )
+            df[f"{col}_punctuation_count"] = df[col].apply(lambda x: sum(1 for char in x if char in string.punctuation))
+            df[f"{col}_capitalized_count"] = df[col].apply(lambda x: sum(1 for word in x.split() if word.isupper()))
             df[f"{col}_special_char_count"] = df[col].apply(
-                lambda x: sum(
-                    1 for char in x if not char.isalnum() and not char.isspace()
-                )
+                lambda x: sum(1 for char in x if not char.isalnum() and not char.isspace())
             )
             df[f"{col}_stopwords_count"] = df[col].apply(
                 lambda x: sum(1 for word in x.split() if word.lower() in stop_words)
             )
 
-            df[f"{col}_unique_word_count"] = df[col].apply(
-                lambda x: len(set(x.split()))
-            )
-            df[f"{col}_lexical_diversity"] = df[f"{col}_unique_word_count"] / df[
-                f"{col}_word_count"
-            ].replace(0, 1)
+            df[f"{col}_unique_word_count"] = df[col].apply(lambda x: len(set(x.split())))
+            df[f"{col}_lexical_diversity"] = df[f"{col}_unique_word_count"] / df[f"{col}_word_count"].replace(0, 1)
 
         return df
 
@@ -429,16 +396,11 @@ class AbdBase:
         )
 
         print(Fore.RED + "\n *** Configuration *** \n")
-        print(
-            Fore.RED + f"Problem Type Selected: {Fore.CYAN + self.problem_type.upper()}"
-        )
+        print(Fore.RED + f"Problem Type Selected: {Fore.CYAN + self.problem_type.upper()}")
         print(Fore.RED + f"Metric Selected: {Fore.CYAN + self.metric.upper()}")
         print(Fore.RED + f"Fold Type Selected: {Fore.CYAN + self.fold_type}")
         print(Fore.RED + f"Calculate Train Probabilities: {Fore.CYAN + str(self.prob)}")
-        print(
-            Fore.RED
-            + f"Calculate Test Probabilities: {Fore.CYAN + str(self.test_prob)}"
-        )
+        print(Fore.RED + f"Calculate Test Probabilities: {Fore.CYAN + str(self.test_prob)}")
         print(Fore.RED + f"Early Stopping: {Fore.CYAN + str(self.early_stop)}")
         print(Fore.RED + f"GPU: {Fore.CYAN + str(self.gpu)}")
 
@@ -448,17 +410,10 @@ class AbdBase:
         if self.test_data is not None and not isinstance(self.test_data, pd.DataFrame):
             raise ValueError("Test data must be a pandas DataFrame.")
         if self.target_column not in self.train_data.columns:
-            raise ValueError(
-                f"Target column '{self.target_column}' not found in the training dataset."
-            )
+            raise ValueError(f"Target column '{self.target_column}' not found in the training dataset.")
         if self.problem_type not in self.problem_types:
-            raise ValueError(
-                "Invalid problem type. Choose either 'classification' or 'regression'."
-            )
-        if (
-            self.metric not in self.metrics
-            and self.metric not in self.regression_metrics
-        ):
+            raise ValueError("Invalid problem type. Choose either 'classification' or 'regression'.")
+        if self.metric not in self.metrics and self.metric not in self.regression_metrics:
             raise ValueError("Invalid metric. Choose from available metrics.")
         if not isinstance(self.n_splits, int) or self.n_splits < 2:
             raise ValueError("n_splits must be an integer greater than 1.")
@@ -474,9 +429,7 @@ class AbdBase:
 
     def get_metric(self, y_true, y_pred, weights=None):
         if self.metric == "roc_auc":
-            return roc_auc_score(
-                y_true, y_pred, multi_class="ovr" if self.num_classes > 2 else None
-            )
+            return roc_auc_score(y_true, y_pred, multi_class="ovr" if self.num_classes > 2 else None)
         elif self.metric == "accuracy":
             return accuracy_score(y_true, y_pred.round())
         elif self.metric == "f1":
@@ -526,26 +479,20 @@ class AbdBase:
     ):
         print(f"The EarlyStopping is {e_stop}") if optuna == False else None
         if self.metric not in self.metrics:
-            raise ValueError(
-                f"Metric '{self.metric}' is not supported. Choose from Given Metrics."
-            )
+            raise ValueError(f"Metric '{self.metric}' is not supported. Choose from Given Metrics.")
         if self.problem_type not in self.problem_types:
             raise ValueError(
                 f"Problem type '{self.problem_type}' is not supported. Choose from: 'classification', 'regression'."
             )
 
         if self.fold_type == "SKF":
-            kfold = StratifiedKFold(
-                n_splits=self.n_splits, shuffle=True, random_state=self.seed
-            )
+            kfold = StratifiedKFold(n_splits=self.n_splits, shuffle=True, random_state=self.seed)
         elif self.fold_type == "KF":
             kfold = KFold(n_splits=self.n_splits, shuffle=True, random_state=self.seed)
         elif self.fold_type == "GKF":
             kfold = GroupKFold(n_splits=self.n_splits)
         elif self.fold_type == "RKF":
-            kfold = RepeatedKFold(
-                n_splits=self.n_splits, n_repeats=1, random_state=self.seed
-            )
+            kfold = RepeatedKFold(n_splits=self.n_splits, n_repeats=1, random_state=self.seed)
         else:
             raise NotImplementedError("Select the Given Cv Statergy")
 
@@ -553,9 +500,7 @@ class AbdBase:
         oof_scores = []
         all_models = []
         oof_predictions = (
-            np.zeros((len(self.y_train), self.num_classes))
-            if self.num_classes > 2
-            else np.zeros(len(self.y_train))
+            np.zeros((len(self.y_train), self.num_classes)) if self.num_classes > 2 else np.zeros(len(self.y_train))
         )
         test_preds = (
             None
@@ -568,9 +513,7 @@ class AbdBase:
         )
 
         cat_features_indices = (
-            [self.X_train.columns.get_loc(col) for col in self.cat_features]
-            if model_name == "CAT"
-            else None
+            [self.X_train.columns.get_loc(col) for col in self.cat_features] if model_name == "CAT" else None
         )
 
         for fold, (train_idx, val_idx) in enumerate(
@@ -578,9 +521,7 @@ class AbdBase:
                 (
                     kfold.split(self.X_train, self.y_train)
                     if self.fold_type != "GKF"
-                    else kfold.split(
-                        self.X_train, self.y_train, groups=self.X_train[g_col]
-                    )
+                    else kfold.split(self.X_train, self.y_train, groups=self.X_train[g_col])
                 ),
                 desc="Training Folds",
                 total=self.n_splits,
@@ -605,9 +546,7 @@ class AbdBase:
 
             # Sample The Test Weights
             def distribute_test_weights(test_sample_size, weights):
-                repeated_weights = np.tile(
-                    weights, int(np.ceil(test_sample_size / len(weights)))
-                )[:test_sample_size]
+                repeated_weights = np.tile(weights, int(np.ceil(test_sample_size / len(weights))))[:test_sample_size]
                 return repeated_weights
 
             if self.weights is not None:
@@ -666,12 +605,8 @@ class AbdBase:
                     )
                 )
             elif model_name == "CAT":
-                train_pool = Pool(
-                    data=X_train, label=y_train, cat_features=cat_features_indices
-                )
-                val_pool = Pool(
-                    data=X_val, label=y_val, cat_features=cat_features_indices
-                )
+                train_pool = Pool(data=X_train, label=y_train, cat_features=cat_features_indices)
+                val_pool = Pool(data=X_val, label=y_val, cat_features=cat_features_indices)
                 model = (
                     CatBoostClassifier(
                         **params,
@@ -711,9 +646,7 @@ class AbdBase:
                     callbacks=callbacks if self.early_stop else None,
                 )
             if model_name == "TABNET":
-                model.fit(
-                    X_train, y_train, eval_set=[(X_val, y_val)], **tab_net_train_params
-                )
+                model.fit(X_train, y_train, eval_set=[(X_val, y_val)], **tab_net_train_params)
             elif model_name == "XGB":
                 model.fit(
                     X_train,
@@ -732,16 +665,8 @@ class AbdBase:
                 model.fit(X_train, y_train)
 
             if self.problem_type == "classification":
-                y_train_pred = (
-                    model.predict_proba(X_train)[:, 1]
-                    if self.prob
-                    else model.predict(X_train)
-                )
-                y_val_pred = (
-                    model.predict_proba(X_val)[:, 1]
-                    if self.prob
-                    else model.predict(X_val)
-                )
+                y_train_pred = model.predict_proba(X_train)[:, 1] if self.prob else model.predict(X_train)
+                y_val_pred = model.predict_proba(X_val)[:, 1] if self.prob else model.predict(X_val)
             else:
                 y_train_pred = model.predict(X_train)
                 y_val_pred = model.predict(X_val)
@@ -758,21 +683,13 @@ class AbdBase:
                 train_scores.append(
                     accuracy_score(
                         y_train,
-                        (
-                            np.argmax(y_train_pred, axis=1)
-                            if self.num_classes > 2
-                            else (y_train_pred > 0.5).astype(int)
-                        ),
+                        (np.argmax(y_train_pred, axis=1) if self.num_classes > 2 else (y_train_pred > 0.5).astype(int)),
                     )
                 )
                 oof_scores.append(
                     accuracy_score(
                         y_val,
-                        (
-                            np.argmax(y_val_pred, axis=1)
-                            if self.num_classes > 2
-                            else (y_val_pred > 0.5).astype(int)
-                        ),
+                        (np.argmax(y_val_pred, axis=1) if self.num_classes > 2 else (y_val_pred > 0.5).astype(int)),
                     )
                 )
             elif self.metric == "roc_auc":
@@ -792,9 +709,7 @@ class AbdBase:
                 )
 
             elif self.metric == "wmae" and self.weights is not None:
-                train_scores.append(
-                    self.get_metric(y_train, y_train_pred, train_weights)
-                )
+                train_scores.append(self.get_metric(y_train, y_train_pred, train_weights))
                 oof_scores.append(self.get_metric(y_val, y_val_pred, val_weights))
 
             else:
@@ -804,9 +719,7 @@ class AbdBase:
             if self.X_test is not None:
                 if self.problem_type == "classification":
                     test_preds[:, fold] = (
-                        model.predict_proba(self.X_test)[:, 1]
-                        if self.test_prob
-                        else model.predict(self.X_test)
+                        model.predict_proba(self.X_test)[:, 1] if self.test_prob else model.predict(self.X_test)
                     )
                 elif model_name == "TABNET":
                     pred = model.predict(self.X_test)
@@ -827,16 +740,8 @@ class AbdBase:
         mean_train_scores = f"{np.mean(train_scores):.4f}"
         mean_off_scores = f"{np.mean(oof_scores):.4f}"
 
-        (
-            print(f"Overall Train {self.metric.upper()}: {mean_train_scores}")
-            if optuna == False
-            else None
-        )
-        (
-            print(f"Overall OOF {self.metric.upper()}: {mean_off_scores} ")
-            if optuna == False
-            else None
-        )
+        (print(f"Overall Train {self.metric.upper()}: {mean_train_scores}") if optuna == False else None)
+        (print(f"Overall OOF {self.metric.upper()}: {mean_off_scores} ") if optuna == False else None)
 
         mean_test_preds = test_preds.mean(axis=1) if self.X_test is not None else None
 
@@ -860,9 +765,7 @@ class AbdBase:
             logger.handlers.clear()
 
         handler = logging.StreamHandler()
-        formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        )
+        formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
         handler.setFormatter(formatter)
         logger.addHandler(handler)
         return logger
@@ -895,9 +798,7 @@ class AbdBase:
         best_scores = {"train_score": None, "val_score": None}
 
         def objective(trial):
-            train_score, val_score = self.OPTUNE_TRAIN(
-                trial, MODEL_NAME=MODEL_NAME, PARAMS=PARAMS, y_log=y_log
-            )
+            train_score, val_score = self.OPTUNE_TRAIN(trial, MODEL_NAME=MODEL_NAME, PARAMS=PARAMS, y_log=y_log)
 
             if best_scores["val_score"] is None or (
                 (DIRECTION == "minimize" and val_score < best_scores["val_score"])
@@ -912,10 +813,7 @@ class AbdBase:
             study.optimize(objective, n_trials=TRIALS)
 
             self.logger.info(
-                Fore.RED
-                + f"--> Best Train Score for {MODEL_NAME}: "
-                + Fore.CYAN
-                + f"{best_scores['train_score']:.4f}"
+                Fore.RED + f"--> Best Train Score for {MODEL_NAME}: " + Fore.CYAN + f"{best_scores['train_score']:.4f}"
             )
             self.logger.info(
                 Fore.RED
@@ -923,9 +821,7 @@ class AbdBase:
                 + Fore.CYAN
                 + f"{best_scores['val_score']:.4f}"
             )
-            self.logger.info(
-                Fore.RED + f"--> Best Parameters: " + Fore.CYAN + f"{study.best_params}"
-            )
+            self.logger.info(Fore.RED + f"--> Best Parameters: " + Fore.CYAN + f"{study.best_params}")
 
             return study
 
@@ -938,9 +834,7 @@ class AbdBase:
         trial: optuna.trial.Trial,
         MODEL_NAME: str = "",
         optuna=True,
-        PARAMS: Optional[
-            Dict[str, Union[Tuple[Union[int, float], Union[int, float]], Any]]
-        ] = None,
+        PARAMS: Optional[Dict[str, Union[Tuple[Union[int, float], Union[int, float]], Any]]] = None,
         y_log: bool = False,
     ) -> Tuple[float, float]:
 
@@ -952,9 +846,7 @@ class AbdBase:
                     if isinstance(value[0], int):
                         params[param] = trial.suggest_int(param, value[0], value[1])
                     elif isinstance(value[0], float):
-                        params[param] = trial.suggest_float(
-                            param, value[0], value[1], log=True
-                        )
+                        params[param] = trial.suggest_float(param, value[0], value[1], log=True)
             except Exception as e:
                 self.logger.error(f"Error suggesting parameter {param}: {e}")
                 raise
@@ -978,9 +870,7 @@ class AbdBase:
                 train_score = float(train_score)
                 return train_score, test_score
             except ValueError as e:
-                raise ValueError(
-                    f"Score '{test_score}' and {train_score} is not a valid float. Original error: {e}"
-                )
+                raise ValueError(f"Score '{test_score}' and {train_score} is not a valid float. Original error: {e}")
 
         except Exception as e:
             self.logger.error(f"Training failed for {MODEL_NAME}: {e}")

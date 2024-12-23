@@ -9,7 +9,6 @@ CONFIG = load_environment_settings("environment-settings.toml")
 
 
 def load_and_preprocess() -> tuple[pd.DataFrame, pd.DataFrame]:
-    warnings.filterwarnings("ignore")
     train = pd.read_parquet(CONFIG.paths.train)
     test = pd.read_parquet(CONFIG.paths.test)
 
@@ -52,12 +51,13 @@ def load_and_preprocess() -> tuple[pd.DataFrame, pd.DataFrame]:
         computation_pipeline,
     )
 
-    warnings.resetwarnings()
     return preprocess_train(train), preprocess_test(test)
 
 
 def main() -> None:
-    train, test = load_and_preprocess()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        train, test = load_and_preprocess()
     train.to_csv("train_refactored.csv", escapechar="|")
     test.to_csv("test_refactored.csv", escapechar="|")
 

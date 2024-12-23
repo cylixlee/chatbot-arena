@@ -6,12 +6,14 @@ import nltk
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+from typing_extensions import override
 
 try:
     from nltk.corpus import stopwords
 except LookupError:
     nltk.download("stopwords")
     from nltk.corpus import stopwords
+
 
 __all__ = [
     "PreprocessPipeline",
@@ -67,6 +69,7 @@ class Sequential(PreprocessPipeline):
     def __init__(self, *pipelines: PreprocessPipeline) -> None:
         self._pipelines = list(pipelines)
 
+    @override
     def __call__(self, frame: pd.DataFrame) -> pd.DataFrame:
         for pipeline in tqdm(self._pipelines, desc="sequential", leave=False):
             frame = pipeline(frame)
@@ -82,6 +85,7 @@ class MapColumnValues(PreprocessPipeline):
     column: str
     mapping: dict
 
+    @override
     def __call__(self, frame: pd.DataFrame) -> pd.DataFrame:
         frame[self.column] = frame[self.column].map(self.mapping)
         return frame
@@ -97,6 +101,7 @@ class DropColumns(PreprocessPipeline):
     def __init__(self, *columns: str) -> None:
         self._columns = list(columns)
 
+    @override
     def __call__(self, frame: pd.DataFrame) -> pd.DataFrame:
         return frame.drop(columns=self._columns, errors="ignore")
 
@@ -110,6 +115,7 @@ class EnforceDType(PreprocessPipeline):
     column: str
     dtype: str
 
+    @override
     def __call__(self, frame: pd.DataFrame) -> pd.DataFrame:
         frame[self.column] = frame[self.column].astype(self.dtype)
         return frame
@@ -141,6 +147,7 @@ class SequentialOnColumns(PreprocessPipeline):
         self._columns = columns
         self._pipelines = list(pipelines)
 
+    @override
     def __call__(self, frame: pd.DataFrame) -> pd.DataFrame:
         for column in tqdm(self._columns, desc="on column", leave=False):
             for pipeline in tqdm(self._pipelines, desc="on pipeline", leave=False):
@@ -151,6 +158,7 @@ class SequentialOnColumns(PreprocessPipeline):
 def _column_pipeline_of(f):
     new_column_suffix = f.__name__
 
+    @override
     class Pipeline(ColumnPreprocessPipeline):
         def __call__(self, frame: pd.DataFrame, column: str) -> pd.DataFrame:
             frame[f"{column}{new_column_suffix}"] = frame[column].apply(f)
@@ -272,40 +280,29 @@ ComputeSentenceLengthMin = _column_pipeline_of(_sentence_length_min)
 
 def _column_pipeline_divide(new: str, numerator: str, denominator: str):
     class Pipeline(ColumnPreprocessPipeline):
+        @override
         def __call__(self, frame: pd.DataFrame, column: str) -> pd.DataFrame:
-            frame[f"{column}_{new}"] = (
-                frame[f"{column}_{numerator}"] / frame[f"{column}_{denominator}"]
-            )
+            frame[f"{column}_{new}"] = frame[f"{column}_{numerator}"] / frame[f"{column}_{denominator}"]
             return frame
 
     return Pipeline
 
 
-ComputeAverageWordLength = _column_pipeline_divide(
-    "avg_word_length", "char_count", "word_count"
-)
-ComputeLexicalDiversity = _column_pipeline_divide(
-    "lexical_diversity", "unique_word_count", "word_count"
-)
+ComputeAverageWordLength = _column_pipeline_divide("avg_word_length", "char_count", "word_count")
+ComputeLexicalDiversity = _column_pipeline_divide("lexical_diversity", "unique_word_count", "word_count")
 
 
 class ComputeResponseLengthDifference(PreprocessPipeline):
+    @override
     def __call__(self, frame: pd.DataFrame) -> pd.DataFrame:
-        frame["response_length_diff_a_b"] = (
-            frame["response_a_length"] - frame["response_b_length"]
-        )
-        frame["response_length_diff_b_a"] = (
-            frame["response_b_length"] - frame["response_a_length"]
-        )
+        frame["response_length_diff_a_b"] = frame["response_a_length"] - frame["response_b_length"]
+        frame["response_length_diff_b_a"] = frame["response_b_length"] - frame["response_a_length"]
         return frame
 
 
 class ComputeResponseLengthRatio(PreprocessPipeline):
+    @override
     def __call__(self, frame: pd.DataFrame) -> pd.DataFrame:
-        frame["response_length_ratio_a_b"] = frame["response_a_length"] / (
-            frame["response_b_length"] + 1e-6
-        )
-        frame["response_length_ratio_b_a"] = frame["response_b_length"] / (
-            frame["response_a_length"] + 1e-6
-        )
+        frame["response_length_ratio_a_b"] = frame["response_a_length"] / (frame["response_b_length"] + 1e-6)
+        frame["response_length_ratio_b_a"] = frame["response_b_length"] / (frame["response_a_length"] + 1e-6)
         return frame
