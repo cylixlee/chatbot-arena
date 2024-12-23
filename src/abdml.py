@@ -1,5 +1,3 @@
-# V_1.3 # Include TabNET + OPTUNA Tunning
-# !pip install -qq pytorch_tabnet
 import string
 import warnings
 
@@ -135,7 +133,7 @@ class AbdBase:
 
         if self.stat_fe:
             print(Fore.YELLOW + f"\nAdding Stats Features")
-            self.txt_columns = stat_fe.get("txt_columns", txt_columns)
+            self.txt_columns = stat_fe.get("txt_columns", txt_columns) # don't know what this is
 
             if self.train_data is not None:
                 self.train_data = self.text_stat(

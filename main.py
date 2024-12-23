@@ -11,7 +11,6 @@ import pandas as pd
 
 from tqdm import tqdm
 
-# from IPython.display import clear_output
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from nltk.corpus import stopwords
