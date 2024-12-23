@@ -11,8 +11,6 @@ import pandas as pd
 
 from tqdm import tqdm
 
-
-from sklearn.feature_extraction.text import TfidfVectorizer
 from nltk.corpus import stopwords
 import string
 import warnings
@@ -40,8 +38,6 @@ files have their own path, which is not good for importing.
 # with open(tp, 'w', encoding='utf-8') as file:
 #     file.write(content)
 
-from src.abdml import AbdBase
-
 """
 Load the data provided by Kaggle.
 
@@ -52,11 +48,11 @@ import toml
 
 CONFIG = toml.load("environment-settings.toml")
 PATHS = None
-for configuration in CONFIG["paths"]["configurations"]:
-    if configuration["name"] == CONFIG["paths"]["enabled"]:
+for configuration in CONFIG["path"]["configurations"]:
+    if configuration["name"] == CONFIG["path"]["enabled"]:
         PATHS = configuration
         break
-assert PATHS is not None, "invalid paths configuration"
+assert PATHS is not None, "invalid path configuration"
 
 
 train = pd.read_parquet(PATHS["train"])
@@ -164,79 +160,81 @@ txt_col = ["prompt", "response_a", "response_b"]
 train = text_stat(train, txt_col)
 test = text_stat(test, txt_col)
 
+train.to_csv("train.csv", escapechar="|")
+test.to_csv("test.csv", escapechar="|")
 
-def tf_fe(train, test, text_columns, max_features=3000, analyzer="char_wb"):
-    train_features = []
-    test_features = []
-
-    for col in tqdm(text_columns, desc="Processing text columns", unit="col"):
-        vectorizer = TfidfVectorizer(analyzer=analyzer, max_features=max_features)
-        train_tfidf_col = vectorizer.fit_transform(train[col])
-        test_tfidf_col = vectorizer.transform(test[col])
-        train_tfidf_col = pd.DataFrame(
-            train_tfidf_col.toarray(),
-            columns=[f"tfidf_{col}_{i}" for i in range(train_tfidf_col.shape[1])],
-        )
-        test_tfidf_col = pd.DataFrame(
-            test_tfidf_col.toarray(),
-            columns=[f"tfidf_{col}_{i}" for i in range(test_tfidf_col.shape[1])],
-        )
-        train_features.append(train_tfidf_col)
-        test_features.append(test_tfidf_col)
-
-    train_with_tfidf = pd.concat([train, *train_features], axis=1)
-    test_with_tfidf = pd.concat([test, *test_features], axis=1)
-
-    return train_with_tfidf, test_with_tfidf
-
-
-txt_col = ["prompt", "response_a", "response_b"]
-train, test = tf_fe(train, test, txt_col)
-
-train = train.drop(columns=txt_col, errors="ignore")
-test = test.drop(columns=txt_col, errors="ignore")
-
-# === AbdBase | LGBM ===
-
-SEED = 42
-
-base = AbdBase(
-    train_data=train,
-    test_data=test,
-    target_column="winner",
-    gpu=False,
-    problem_type="classification",
-    metric="accuracy",
-    seed=SEED,
-    n_splits=5,
-    early_stop=True,
-    num_classes=2,
-    test_prob=True,
-    fold_type="SKF",
-    weights=None,
-    tf_vec=False,
-)
-
-Params = {
-    "n_estimators": 2083,
-    "learning_rate": 0.02516607127550297,
-    "max_depth": 11,
-    "num_leaves": 31,
-    "n_jobs": -1,
-    "min_child_samples": 42,
-    "subsample": 0.8085392166316496,
-    "colsample_bytree": 0.6281848449949525,
-    "lambda_l1": 4.02155452669029,
-    "lambda_l2": 0.14096175149815865,
-    "min_gain_to_split": 0.2960660809801552,
-}
-
-meanOFFL, meanTestL, *_ = base.Train_ML(Params, "LGBM", e_stop=40)
-
-# === Submission ===
-
-sample["winner"] = np.round(meanTestL).astype("int")
-sample["winner"] = sample["winner"].map({0: "model_a", 1: "model_b"})
-
-sample.to_csv("submission.csv", index=False)
-sample.head()
+# def tf_fe(train, test, text_columns, max_features=3000, analyzer="char_wb"):
+#     train_features = []
+#     test_features = []
+#
+#     for col in tqdm(text_columns, desc="Processing text columns", unit="col"):
+#         vectorizer = TfidfVectorizer(analyzer=analyzer, max_features=max_features)
+#         train_tfidf_col = vectorizer.fit_transform(train[col])
+#         test_tfidf_col = vectorizer.transform(test[col])
+#         train_tfidf_col = pd.DataFrame(
+#             train_tfidf_col.toarray(),
+#             columns=[f"tfidf_{col}_{i}" for i in range(train_tfidf_col.shape[1])],
+#         )
+#         test_tfidf_col = pd.DataFrame(
+#             test_tfidf_col.toarray(),
+#             columns=[f"tfidf_{col}_{i}" for i in range(test_tfidf_col.shape[1])],
+#         )
+#         train_features.append(train_tfidf_col)
+#         test_features.append(test_tfidf_col)
+#
+#     train_with_tfidf = pd.concat([train, *train_features], axis=1)
+#     test_with_tfidf = pd.concat([test, *test_features], axis=1)
+#
+#     return train_with_tfidf, test_with_tfidf
+#
+#
+# txt_col = ["prompt", "response_a", "response_b"]
+# train, test = tf_fe(train, test, txt_col)
+#
+# train = train.drop(columns=txt_col, errors="ignore")
+# test = test.drop(columns=txt_col, errors="ignore")
+#
+# # === AbdBase | LGBM ===
+#
+# SEED = 42
+#
+# base = AbdBase(
+#     train_data=train,
+#     test_data=test,
+#     target_column="winner",
+#     gpu=False,
+#     problem_type="classification",
+#     metric="accuracy",
+#     seed=SEED,
+#     n_splits=5,
+#     early_stop=True,
+#     num_classes=2,
+#     test_prob=True,
+#     fold_type="SKF",
+#     weights=None,
+#     tf_vec=False,
+# )
+#
+# Params = {
+#     "n_estimators": 2083,
+#     "learning_rate": 0.02516607127550297,
+#     "max_depth": 11,
+#     "num_leaves": 31,
+#     "n_jobs": -1,
+#     "min_child_samples": 42,
+#     "subsample": 0.8085392166316496,
+#     "colsample_bytree": 0.6281848449949525,
+#     "lambda_l1": 4.02155452669029,
+#     "lambda_l2": 0.14096175149815865,
+#     "min_gain_to_split": 0.2960660809801552,
+# }
+#
+# meanOFFL, meanTestL, *_ = base.Train_ML(Params, "LGBM", e_stop=40)
+#
+# # === Submission ===
+#
+# sample["winner"] = np.round(meanTestL).astype("int")
+# sample["winner"] = sample["winner"].map({0: "model_a", 1: "model_b"})
+#
+# sample.to_csv("submission.csv", index=False)
+# sample.head()

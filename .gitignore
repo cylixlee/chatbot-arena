@@ -1,6 +1,6 @@
 # Data files.
 data/
-submission.csv
+*.csv
 
 
 # Byte-compiled / optimized / DLL files
