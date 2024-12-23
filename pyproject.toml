@@ -2,7 +2,11 @@
 name = "chatbot-arena"
 version = "0.1.0"
 description = "Coursework of Advanced Machine Learning, towards the WSDM Cup - Multilingual Chatbot Arena competition on Kaggle."
-authors = [{ name = "Cylix Lee", email = "cylix.lee@outlook.com" }]
+authors = [
+    { name = "Cylix Lee", email = "cylix.lee@outlook.com" },
+    { name = "Steven He", email = "3298124258@qq.com"},
+    { name = "Hui Zhang", email = "2154695037@qq.com"},
+]
 dependencies = [
     "numpy>=1.26.4",
     "pandas[feather,parquet]>=2.2.3",
