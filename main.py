@@ -1,4 +1,9 @@
+import nltk
+
+nltk.download("stopwords")
+
 # === Starter ===
+
 
 import numpy as np
 import polars as pl
@@ -18,7 +23,6 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from nltk.corpus import stopwords
 import nltk
 import string
-
 import warnings
 warnings.filterwarnings('ignore')
 pd.options.display.max_columns = None
@@ -34,19 +38,37 @@ n_splits = 5
 
 # === Preprocess ===
 
-sp = '/kaggle/input/abdbase/AbdML/main.py'
-tp = '/kaggle/working/main.py'
+"""
+Clone the ABD module file.
 
-with open(sp, 'r', encoding='utf-8') as file:
-    content = file.read()
-with open(tp, 'w', encoding='utf-8') as file:
-    file.write(content)
+Due to the limitation of Kaggle, modules can only be referenced through "input". Input 
+files have their own path, which is not good for importing.
+"""
+
+# sp = '/kaggle/input/abdbase/AbdML/main.py'
+# tp = '/kaggle/working/main.py'
+#
+# with open(sp, 'r', encoding='utf-8') as file:
+#     content = file.read()
+# with open(tp, 'w', encoding='utf-8') as file:
+#     file.write(content)
 
 from src.abdml import AbdBase
 
-train = pd.read_parquet('/kaggle/input/wsdm-cup-multilingual-chatbot-arena/train.parquet')
-test = pd.read_parquet('/kaggle/input/wsdm-cup-multilingual-chatbot-arena/test.parquet')
-sample = pd.read_csv('/kaggle/input/wsdm-cup-multilingual-chatbot-arena/sample_submission.csv')
+"""
+Load the data provided by Kaggle.
+
+The path is different between Kaggle virtual environments and the local one. Thus, 
+a configuration is adopted and those paths can be switched conveniently.
+"""
+import toml
+
+CONFIG = toml.load("environment-settings.toml")
+PATHS = CONFIG["paths"][CONFIG["paths"]["adopted"]]
+
+train = pd.read_parquet(PATHS["train"])
+test = pd.read_parquet(PATHS["test"])
+sample = pd.read_csv(PATHS["sample"])
 
 train['winner'] = train['winner'].map({"model_a": 0, "model_b": 1})
 drop_cols = ['model_a', 'model_b', 'language', 'scored']
@@ -146,7 +168,7 @@ Params = {'n_estimators': 2083, 'learning_rate': 0.02516607127550297, 'max_depth
           'min_child_samples': 42, 'subsample': 0.8085392166316496, 'colsample_bytree': 0.6281848449949525,
           'lambda_l1': 4.02155452669029, 'lambda_l2': 0.14096175149815865, 'min_gain_to_split': 0.2960660809801552}
 
-meanOFFL, meanTestL = base.Train_ML(Params,'LGBM',e_stop=40)
+meanOFFL, meanTestL, *_ = base.Train_ML(Params,'LGBM',e_stop=40)
 
 # === Submission ===
 
@@ -155,3 +177,4 @@ sample['winner'] = sample['winner'].map({0: 'model_a', 1: 'model_b'})
 
 sample.to_csv('submission.csv', index = False)
 sample.head()
+

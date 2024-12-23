@@ -1,0 +1,12 @@
+[paths]
+adopted = "local"
+
+[paths.local]
+train = "data/train.parquet"
+test = "data/test.parquet"
+sample = "data/sample_submission.csv"
+
+[paths.kaggle]
+train = "/kaggle/input/wsdm-cup-multilingual-chatbot-arena/train.parquet"
+test = "/kaggle/input/wsdm-cup-multilingual-chatbot-arena/test.parquet"
+sample = "/kaggle/input/wsdm-cup-multilingual-chatbot-arena/sample_submission.csv"
