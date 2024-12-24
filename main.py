@@ -4,7 +4,7 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from src.abdml import AbdBase
+from src.legacy.abdml import AbdBase
 from src.preprocessing import *
 from src.settings import load_environment_settings
 
