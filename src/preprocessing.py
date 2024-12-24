@@ -190,9 +190,8 @@ def _punctuation_count(x: str) -> int:
 def _capitalized_count(x: str) -> int:
     count = 0
     for word in x.split():
-        for char in word:
-            if char.isupper():
-                count += 1
+        if word.isupper():
+            count += 1
     return count
 
 
@@ -235,29 +234,37 @@ def _word_length_min(x: str) -> int:
 def _sentence_length_mean(x: str) -> np.floating:
     lengths = []
     for sentence in x.split("."):
-        lengths.append(len(sentence.strip().split()))
+        sentence = sentence.strip()
+        if sentence:
+            lengths.append(len(sentence.split()))
     return np.mean(lengths)
 
 
 def _sentence_length_median(x: str) -> np.floating:
     lengths = []
     for sentence in x.split("."):
-        lengths.append(len(sentence.strip().split()))
+        sentence = sentence.strip()
+        if sentence:
+            lengths.append(len(sentence.split()))
     return np.median(lengths)
 
 
 def _sentence_length_max(x: str) -> int:
     lengths = []
     for sentence in x.split("."):
-        lengths.append(len(sentence.strip().split()))
-    return max(lengths)
+        sentence = sentence.strip()
+        if sentence:
+            lengths.append(len(sentence.split()))
+    return max(lengths, default=0)
 
 
 def _sentence_length_min(x: str) -> int:
     lengths = []
     for sentence in x.split("."):
-        lengths.append(len(sentence.strip().split()))
-    return min(lengths)
+        sentence = sentence.strip()
+        if sentence:
+            lengths.append(len(sentence.split()))
+    return min(lengths, default=0)
 
 
 ComputeLength = _column_pipeline_of(_length)
