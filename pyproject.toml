@@ -1,6 +1,6 @@
 [project]
 name = "chatbot-arena"
-version = "0.1.0"
+version = "1.0.0"
 description = "Coursework of Advanced Machine Learning, towards the WSDM Cup - Multilingual Chatbot Arena competition on Kaggle."
 authors = [
     { name = "Cylix Lee", email = "cylix.lee@outlook.com" },

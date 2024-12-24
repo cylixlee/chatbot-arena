@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TypeVar, Generic
 
+import numpy as np
+
 __all__ = ["ProblemSolution", "ProblemSolver"]
 
 _TParams = TypeVar("_TParams")
@@ -15,7 +17,8 @@ class ProblemSolution(object):
     For more details, see ProblemSolver.
     """
 
-    accuracy: float
+    oof_predictions: np.ndarray
+    mean_test_prediction_proba: np.ndarray
 
 
 class ProblemSolver(Generic[_TParams], ABC):

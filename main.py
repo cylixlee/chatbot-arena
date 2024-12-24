@@ -1,12 +1,13 @@
+import dataclasses
 import queue
 import warnings
 
 import numpy as np
 import pandas as pd
 
-from src.legacy.abdml import AbdBase
 from src.preprocessing import *
 from src.settings import load_environment_settings
+from src.solvers.lgbm import LGBMSolver, LGBMParams
 
 CONFIG = load_environment_settings("environment-settings.toml")
 
@@ -123,22 +124,22 @@ def main() -> None:
 
     # Calling the encapsulated AbdBase model, same in the legacy code.
 
-    base = AbdBase(
-        train_data=train,
-        test_data=test,
-        target_column="winner",
-        gpu=False,
-        problem_type="classification",
-        metric="accuracy",
-        seed=42,
-        n_splits=5,
-        early_stop=True,
-        num_classes=2,
-        test_prob=True,
-        fold_type="SKF",
-        weights=None,
-        tf_vec=False,
-    )
+    # base = AbdBase(
+    #     train_data=train,
+    #     test_data=test,
+    #     target_column="winner",
+    #     gpu=False,
+    #     problem_type="classification",
+    #     metric="accuracy",
+    #     seed=42,
+    #     n_splits=5,
+    #     early_stop=True,
+    #     num_classes=2,
+    #     test_prob=True,
+    #     fold_type="SKF",
+    #     weights=None,
+    #     tf_vec=False,
+    # )
 
     params = {
         "n_estimators": 2083,
@@ -152,9 +153,16 @@ def main() -> None:
         "lambda_l1": 4.02155452669029,
         "lambda_l2": 0.14096175149815865,
         "min_gain_to_split": 0.2960660809801552,
+        "early_stop": 40,
+        "random_state": 42,
     }
 
-    mean_oof_label, mean_test_label, *_ = base.Train_ML(params, "LGBM", e_stop=40)
+    # mean_oof_label, mean_test_label, *_ = base.Train_ML(params, "LGBM", e_stop=40)
+
+    solver = LGBMSolver(train, test, target_column="winner", gpu=False)
+    # noinspection PyTypeChecker
+    mean_oof_label, mean_test_label = dataclasses.astuple(solver.solve(LGBMParams(**params)))
+
     sample = pd.read_csv(CONFIG.paths.sample)
     sample["winner"] = np.round(mean_test_label).astype("int")
     sample["winner"] = sample["winner"].map({0: "model_a", 1: "model_b"})
