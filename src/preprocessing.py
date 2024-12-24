@@ -1,3 +1,35 @@
+"""
+The preprocessing module.
+
+This module contains several kinds of preprocessing pipelines. A preprocessing pipeline is an object with a __call__
+function receiving a pandas DataFrame, doing some operations on it, and returns it. This design pattern is called the
+pipeline pattern or the middleware pattern.
+
+There are two special kinds of pipelines: the Sequential and the SequentialOnColumns. The former takes and wraps
+several PreprocessPipelines, and execute them in their definition order when __call__ of the Sequential pipeline is
+called.
+
+    Example:
+
+        import pandas as pd
+        data = pd.DataFrame(
+            [
+                ["a", "b", "hello"],
+                ["a", "b", "world"],
+            ],
+            columns=["a", "b", "c"],
+        )
+        pipeline = Sequential(
+            DropColumns("a", "b"),
+            MapColumnValues("c", {"hello": 1, "world": 2}),
+        )
+        data = pipeline(data)
+
+In the example above, the "a" and "b" columns is dropped and the values of "c" column is transformed into 1 and 2.
+The advantage of pipeline pattern is that the pipelines can be easily added, removed, reordered without changing the
+preprocessing procedure thoroughly.
+"""
+
 import queue
 import string
 from abc import ABC, abstractmethod
@@ -10,6 +42,8 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from tqdm import tqdm
 from typing_extensions import override
 
+# The NLTK toolkit needs downloading before usage. Calling download every time is unnecessary, so here we first try
+# to import it, and download the data if the LookupError occurs.
 try:
     from nltk.corpus import stopwords
 except LookupError:
@@ -49,13 +83,15 @@ __all__ = [
     "PairedVectorizationByTfidf",
 ]
 
+# The stopwords provided by NLTK. Transformed into a set (i.e. HashSet in other languages) to keep the words appear
+# once.
 _stopwords = set(stopwords.words("english"))
 
 
 class PreprocessPipeline(ABC):
     """
     The base class of all preprocess pipelines. It receives a DataFrame and does some transformations,
-    and then return the preprocessed data.
+    and then returns the preprocessed data.
     """
 
     @abstractmethod
@@ -65,7 +101,7 @@ class PreprocessPipeline(ABC):
 
 class Sequential(PreprocessPipeline):
     """
-    Aggregate a pipeline sequence into a single pipeline.
+    Aggregate a pipeline sequence into a single pipeline. Execute them in their definition order when called.
     """
 
     _pipelines: list[PreprocessPipeline]
@@ -140,7 +176,8 @@ class ColumnPreprocessPipeline(ABC):
 
 class SequentialOnColumns(PreprocessPipeline):
     """
-    Execute a sequence of ColumnPreprocessPipeline on several specific columns.
+    Execute a sequence of ColumnPreprocessPipeline on several specific columns. Execute them in their definition
+    order when called on a specific column of a DataFrame.
     """
 
     _columns: list[str]
@@ -169,15 +206,39 @@ class SequentialOnColumns(PreprocessPipeline):
 
 
 def _column_pipeline_of(f):
+    """
+    Generate a Pipeline class from a computation function.
+
+    This function is defined for convenience. For example, we can get the number of words in a text by calling
+    _word_count() on it, and create a new column according to the counted values.
+
+        Example:
+
+            word_count = len("some text".split())
+            dataframe["word_count"] = word_count
+
+    Similarly, we can create a "length" column by calling len() on that text.
+
+        Example:
+
+            length = len("some text")
+            dataframe["length"] = length
+
+    And this boilerplate is redundant and boring. More importantly, it is not a Pipeline, which can be added,
+    removed and reordered in practice.
+
+    This function receives a function, which receives an element of a specific column, and returns the corresponding
+    value of a new column. The new column is named after the original column and the function itself.
+    """
     new_column_suffix = f.__name__
 
     @override
-    class Pipeline(ColumnPreprocessPipeline):
+    class InlinePipeline(ColumnPreprocessPipeline):
         def __call__(self, frame: pd.DataFrame, column: str) -> pd.DataFrame:
             frame[f"{column}{new_column_suffix}"] = frame[column].apply(f)
             return frame
 
-    return Pipeline
+    return InlinePipeline
 
 
 def _length(x: str) -> int:
@@ -280,6 +341,10 @@ def _sentence_length_min(x: str) -> int:
     return min(lengths, default=0)
 
 
+# The generated inline pipelines.
+#
+# For example, the ComputeLength is a pipeline generated from the _length function, which calls _length() on every
+# element of a specific column, and create a new column named "{column}_length".
 ComputeLength = _column_pipeline_of(_length)
 ComputeWordCount = _column_pipeline_of(_word_count)
 ComputeCharCount = _column_pipeline_of(_char_count)
@@ -299,13 +364,19 @@ ComputeSentenceLengthMin = _column_pipeline_of(_sentence_length_min)
 
 
 def _column_pipeline_divide(new: str, numerator: str, denominator: str):
-    class Pipeline(ColumnPreprocessPipeline):
+    """
+    Also an inline-pipeline generator function.
+
+    For more details, see doc comments about _column_pipeline_of().
+    """
+
+    class InlinePipeline(ColumnPreprocessPipeline):
         @override
         def __call__(self, frame: pd.DataFrame, column: str) -> pd.DataFrame:
             frame[f"{column}_{new}"] = frame[f"{column}_{numerator}"] / frame[f"{column}_{denominator}"]
             return frame
 
-    return Pipeline
+    return InlinePipeline
 
 
 ComputeAverageWordLength = _column_pipeline_divide("avg_word_length", "char_count", "word_count")
@@ -330,6 +401,16 @@ class ComputeResponseLengthRatio(PreprocessPipeline):
 
 @dataclass
 class ProgressiveVectorizationByTfidf(ColumnPreprocessPipeline):
+    """
+    A text-vectorization pipeline.
+
+    This pipeline receives a TfidfVectorizer during its lifetime, and, if created with fit_transform=True,
+    perform fit_transform() on text columns every time it is called.
+
+    It is called "Progressive" because the vectorizer is not reset: it's parameter is continuously updated with
+    different text columns applied. This behavior may influence the training procedure, and thus the final accuracy.
+    """
+
     fit_transform: bool
     vectorizer: TfidfVectorizer
 
@@ -347,13 +428,24 @@ class ProgressiveVectorizationByTfidf(ColumnPreprocessPipeline):
 
 
 class PairedVectorizationByTfidf(ColumnPreprocessPipeline):
+    """
+    A text-vectorization pipeline, with each column a brand new TfidfVectorizer.
+
+    This pipeline receives a vectorizer_queue when created. It creates a new TfidfVectorizer and put it into the
+    queue when called with fit_transform=True, and get an existing TfidfVectorizer out of the queue when
+    fit_transform=False.
+
+    This pipeline ensures the vectorizers are independent of the others from different text columns. This is the
+    adopted one in the legacy code.
+    """
+
     _vectorizer_queue: queue.Queue
     _fit_transform: bool
     _args: tuple
     _kwargs: dict
 
-    def __init__(self, queue: queue.Queue, fit_transform: bool, *args, **kwargs) -> None:
-        self._vectorizer_queue = queue
+    def __init__(self, vectorizer_queue: queue.Queue, fit_transform: bool, *args, **kwargs) -> None:
+        self._vectorizer_queue = vectorizer_queue
         self._fit_transform = fit_transform
         self._args = args
         self._kwargs = kwargs

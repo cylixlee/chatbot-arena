@@ -12,10 +12,23 @@ CONFIG = load_environment_settings("environment-settings.toml")
 
 
 def load_and_preprocess() -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Load the data from binaries (i.e. parquet files) and perform preprocessing operations on them.
+
+    Returns: a DataFrame containing the train data and the other containing test.
+    """
     train = pd.read_parquet(CONFIG.paths.train)
     test = pd.read_parquet(CONFIG.paths.test)
 
+    # Computation pipelines.
+    #
+    # There are 3 text column in the data: "prompt", "response_a" and "response_b". The computation part is to
+    # compute the features of those text columns manually (e.g. word count, average word length, etc.) and create new
+    # columns to store them.
+    #
+    # Those new columns will be passed to the model training as input features.
     computation_pipeline = Sequential(
+        # do computations sequentially on those three text columns.
         SequentialOnColumns(
             ["prompt", "response_a", "response_b"],
             ComputeLength(),
@@ -37,17 +50,37 @@ def load_and_preprocess() -> tuple[pd.DataFrame, pd.DataFrame]:
             ComputeSentenceLengthMax(),
             ComputeSentenceLengthMin(),
         ),
+        # moreover, the difference and ratio between two responses are computed.
         ComputeResponseLengthDifference(),
         ComputeResponseLengthRatio(),
     )
 
+    # the queue storing TfidfVectorizers, for PairedVectorizationByTfidf pipeline.
     vectorizer_queue = queue.Queue()
 
+    # fmt: off
     preprocess_train = Sequential(
+        # Transformation.
+        #
+        # Data transformations are done here, for example, transforming the winners ("model_a", "model_b") into
+        # numbers (0 or 1), since this is a classification task.
         MapColumnValues("winner", {"model_a": 0, "model_b": 1}),
         DropColumns("model_a", "model_b", "language", "scored"),
         EnforceDType("id", "category"),
+
+        # Computation.
+        #
+        # Former defined computation pipelines are applied here. We define them separately because they can be reused
+        # in the preprocess_text pipeline.
         computation_pipeline,
+
+        # Vectorization.
+        #
+        # Besides the computed features, we still need to feed the original texts to models, in some form.
+        # Vectorization is the solution: we use vectorizer to transform the text into numbers, and then take them as
+        # input features.
+        #
+        # The inner principle of vectorizer is not discussed here. We just import and call them.
         SequentialOnColumns(
             ["prompt", "response_a", "response_b"],
             PairedVectorizationByTfidf(
@@ -57,9 +90,13 @@ def load_and_preprocess() -> tuple[pd.DataFrame, pd.DataFrame]:
                 max_features=3000,
             ),
         ),
+
+        # since we've vectorized the text columns, we no longer need them.
         DropColumns("prompt", "response_a", "response_b"),
     )
+    # fmt: on
 
+    # Similar to process_train so we don't comment this one in detail.
     preprocess_test = Sequential(
         DropColumns("model_a", "model_b", "language", "scored"),
         EnforceDType("id", "category"),
@@ -80,9 +117,11 @@ def load_and_preprocess() -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def main() -> None:
-    with warnings.catch_warnings():
+    with warnings.catch_warnings():  # warnings in preprocessing stage are ignored.
         warnings.simplefilter("ignore")
         train, test = load_and_preprocess()
+
+    # Calling the encapsulated AbdBase model, same in the legacy code.
 
     base = AbdBase(
         train_data=train,
