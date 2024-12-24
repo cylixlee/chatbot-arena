@@ -46,7 +46,7 @@ __all__ = [
     "ComputeResponseLengthDifference",
     "ComputeResponseLengthRatio",
     "ProgressiveVectorizationByTfidf",
-    "QueuedVectorizationByTfidf",
+    "PairedVectorizationByTfidf",
 ]
 
 _stopwords = set(stopwords.words("english"))
@@ -346,7 +346,7 @@ class ProgressiveVectorizationByTfidf(ColumnPreprocessPipeline):
         return frame
 
 
-class QueuedVectorizationByTfidf(ColumnPreprocessPipeline):
+class PairedVectorizationByTfidf(ColumnPreprocessPipeline):
     _vectorizer_queue: queue.Queue
     _fit_transform: bool
     _args: tuple
