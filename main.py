@@ -122,25 +122,6 @@ def main() -> None:
         warnings.simplefilter("ignore")
         train, test = load_and_preprocess()
 
-    # Calling the encapsulated AbdBase model, same in the legacy code.
-
-    # base = AbdBase(
-    #     train_data=train,
-    #     test_data=test,
-    #     target_column="winner",
-    #     gpu=False,
-    #     problem_type="classification",
-    #     metric="accuracy",
-    #     seed=42,
-    #     n_splits=5,
-    #     early_stop=True,
-    #     num_classes=2,
-    #     test_prob=True,
-    #     fold_type="SKF",
-    #     weights=None,
-    #     tf_vec=False,
-    # )
-
     params = {
         "n_estimators": 2083,
         "learning_rate": 0.02516607127550297,
@@ -156,8 +137,6 @@ def main() -> None:
         "early_stop": 40,
         "random_state": 42,
     }
-
-    # mean_oof_label, mean_test_label, *_ = base.Train_ML(params, "LGBM", e_stop=40)
 
     solver = LGBMSolver(train, test, target_column="winner", gpu=False)
     # noinspection PyTypeChecker
