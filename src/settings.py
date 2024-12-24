@@ -35,8 +35,11 @@ def load_environment_settings(path: str | os.PathLike) -> EnvironmentSettings:
     """
     Load environment settings from a configuration file.
 
-    :param path: the path to the configuration file.
-    :return: an EnvironmentSettings object if loaded successfully
+    Args:
+        path: the path to the configuration file.
+
+    Returns:
+        an EnvironmentSettings object if loaded successfully
     """
     with open(path, encoding="utf-8") as file:
         settings = toml.load(file)

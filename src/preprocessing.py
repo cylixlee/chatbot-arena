@@ -1,3 +1,4 @@
+import queue
 import string
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -5,6 +6,7 @@ from dataclasses import dataclass
 import nltk
 import numpy as np
 import pandas as pd
+from sklearn.feature_extraction.text import TfidfVectorizer
 from tqdm import tqdm
 from typing_extensions import override
 
@@ -43,6 +45,8 @@ __all__ = [
     "ComputeLexicalDiversity",
     "ComputeResponseLengthDifference",
     "ComputeResponseLengthRatio",
+    "ProgressiveVectorizationByTfidf",
+    "QueuedVectorizationByTfidf",
 ]
 
 _stopwords = set(stopwords.words("english"))
@@ -71,8 +75,11 @@ class Sequential(PreprocessPipeline):
 
     @override
     def __call__(self, frame: pd.DataFrame) -> pd.DataFrame:
-        for pipeline in tqdm(self._pipelines, desc="sequential", leave=False):
-            frame = pipeline(frame)
+        with tqdm(total=len(self._pipelines), leave=False) as progress:
+            for pipeline in self._pipelines:
+                progress.set_description(f"on pipeline {type(pipeline).__name__}")
+                frame = pipeline(frame)
+                progress.update()
         return frame
 
 
@@ -149,9 +156,15 @@ class SequentialOnColumns(PreprocessPipeline):
 
     @override
     def __call__(self, frame: pd.DataFrame) -> pd.DataFrame:
-        for column in tqdm(self._columns, desc="on column", leave=False):
-            for pipeline in tqdm(self._pipelines, desc="on pipeline", leave=False):
-                frame = pipeline(frame, column)
+        with tqdm(total=len(self._columns), leave=False) as column_progress:
+            for column in self._columns:
+                column_progress.set_description(f"on column {column}")
+                with tqdm(total=len(self._pipelines), leave=False) as pipeline_progress:
+                    for pipeline in self._pipelines:
+                        pipeline_progress.set_description(f"on pipeline {type(pipeline).__name__}")
+                        frame = pipeline(frame, column)
+                        pipeline_progress.update()
+                column_progress.update()
         return frame
 
 
@@ -312,4 +325,50 @@ class ComputeResponseLengthRatio(PreprocessPipeline):
     def __call__(self, frame: pd.DataFrame) -> pd.DataFrame:
         frame["response_length_ratio_a_b"] = frame["response_a_length"] / (frame["response_b_length"] + 1e-6)
         frame["response_length_ratio_b_a"] = frame["response_b_length"] / (frame["response_a_length"] + 1e-6)
+        return frame
+
+
+@dataclass
+class ProgressiveVectorizationByTfidf(ColumnPreprocessPipeline):
+    fit_transform: bool
+    vectorizer: TfidfVectorizer
+
+    def __call__(self, frame: pd.DataFrame, column: str) -> pd.DataFrame:
+        if self.fit_transform:
+            vectorized_columns = self.vectorizer.fit_transform(frame[column])
+        else:
+            vectorized_columns = self.vectorizer.transform(frame[column])
+        series = pd.DataFrame(
+            vectorized_columns.toarray(),
+            columns=[f"tfidf_{column}_{i}" for i in range(vectorized_columns.shape[1])],
+        )
+        frame = pd.concat([frame, series], axis=1)
+        return frame
+
+
+class QueuedVectorizationByTfidf(ColumnPreprocessPipeline):
+    _vectorizer_queue: queue.Queue
+    _fit_transform: bool
+    _args: tuple
+    _kwargs: dict
+
+    def __init__(self, queue: queue.Queue, fit_transform: bool, *args, **kwargs) -> None:
+        self._vectorizer_queue = queue
+        self._fit_transform = fit_transform
+        self._args = args
+        self._kwargs = kwargs
+
+    def __call__(self, frame: pd.DataFrame, column: str) -> pd.DataFrame:
+        if self._fit_transform:
+            vectorizer = TfidfVectorizer(*self._args, **self._kwargs)
+            vectorized_columns = vectorizer.fit_transform(frame[column])
+            self._vectorizer_queue.put(vectorizer)
+        else:
+            vectorizer = self._vectorizer_queue.get()
+            vectorized_columns = vectorizer.transform(frame[column])
+        series = pd.DataFrame(
+            vectorized_columns.toarray(),
+            columns=[f"tfidf_{column}_{i}" for i in range(vectorized_columns.shape[1])],
+        )
+        frame = pd.concat([frame, series], axis=1)
         return frame

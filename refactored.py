@@ -1,3 +1,4 @@
+import queue
 import warnings
 
 import pandas as pd
@@ -38,17 +39,29 @@ def load_and_preprocess() -> tuple[pd.DataFrame, pd.DataFrame]:
         ComputeResponseLengthRatio(),
     )
 
+    vectorizer_queue = queue.Queue()
+
     preprocess_train = Sequential(
         MapColumnValues("winner", {"model_a": 0, "model_b": 1}),
         DropColumns("model_a", "model_b", "language", "scored"),
         EnforceDType("id", "category"),
         computation_pipeline,
+        SequentialOnColumns(
+            ["prompt", "response_a", "response_b"],
+            QueuedVectorizationByTfidf(vectorizer_queue, fit_transform=True, analyzer="char_wb", max_features=3000),
+        ),
+        DropColumns("prompt", "response_a", "response_b"),
     )
 
     preprocess_test = Sequential(
         DropColumns("model_a", "model_b", "language", "scored"),
         EnforceDType("id", "category"),
         computation_pipeline,
+        SequentialOnColumns(
+            ["prompt", "response_a", "response_b"],
+            QueuedVectorizationByTfidf(vectorizer_queue, fit_transform=False, analyzer="char_wb", max_features=3000),
+        ),
+        DropColumns("prompt", "response_a", "response_b"),
     )
 
     return preprocess_train(train), preprocess_test(test)

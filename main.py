@@ -1,4 +1,5 @@
 import nltk
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 nltk.download("stopwords")
 
@@ -126,40 +127,41 @@ txt_col = ["prompt", "response_a", "response_b"]
 train = text_stat(train, txt_col)
 test = text_stat(test, txt_col)
 
+
+def tf_fe(train, test, text_columns, max_features=3000, analyzer="char_wb"):
+    train_features = []
+    test_features = []
+
+    for col in tqdm(text_columns, desc="Processing text columns", unit="col"):
+        vectorizer = TfidfVectorizer(analyzer=analyzer, max_features=max_features)
+        train_tfidf_col = vectorizer.fit_transform(train[col])
+        test_tfidf_col = vectorizer.transform(test[col])
+        train_tfidf_col = pd.DataFrame(
+            train_tfidf_col.toarray(),
+            columns=[f"tfidf_{col}_{i}" for i in range(train_tfidf_col.shape[1])],
+        )
+        test_tfidf_col = pd.DataFrame(
+            test_tfidf_col.toarray(),
+            columns=[f"tfidf_{col}_{i}" for i in range(test_tfidf_col.shape[1])],
+        )
+        train_features.append(train_tfidf_col)
+        test_features.append(test_tfidf_col)
+
+    train_with_tfidf = pd.concat([train, *train_features], axis=1)
+    test_with_tfidf = pd.concat([test, *test_features], axis=1)
+
+    return train_with_tfidf, test_with_tfidf
+
+
+txt_col = ["prompt", "response_a", "response_b"]
+train, test = tf_fe(train, test, txt_col)
+
+train = train.drop(columns=txt_col, errors="ignore")
+test = test.drop(columns=txt_col, errors="ignore")
+
 train.to_csv("train.csv", escapechar="|")
 test.to_csv("test.csv", escapechar="|")
 
-# def tf_fe(train, test, text_columns, max_features=3000, analyzer="char_wb"):
-#     train_features = []
-#     test_features = []
-#
-#     for col in tqdm(text_columns, desc="Processing text columns", unit="col"):
-#         vectorizer = TfidfVectorizer(analyzer=analyzer, max_features=max_features)
-#         train_tfidf_col = vectorizer.fit_transform(train[col])
-#         test_tfidf_col = vectorizer.transform(test[col])
-#         train_tfidf_col = pd.DataFrame(
-#             train_tfidf_col.toarray(),
-#             columns=[f"tfidf_{col}_{i}" for i in range(train_tfidf_col.shape[1])],
-#         )
-#         test_tfidf_col = pd.DataFrame(
-#             test_tfidf_col.toarray(),
-#             columns=[f"tfidf_{col}_{i}" for i in range(test_tfidf_col.shape[1])],
-#         )
-#         train_features.append(train_tfidf_col)
-#         test_features.append(test_tfidf_col)
-#
-#     train_with_tfidf = pd.concat([train, *train_features], axis=1)
-#     test_with_tfidf = pd.concat([test, *test_features], axis=1)
-#
-#     return train_with_tfidf, test_with_tfidf
-#
-#
-# txt_col = ["prompt", "response_a", "response_b"]
-# train, test = tf_fe(train, test, txt_col)
-#
-# train = train.drop(columns=txt_col, errors="ignore")
-# test = test.drop(columns=txt_col, errors="ignore")
-#
 # # === AbdBase | LGBM ===
 #
 # SEED = 42
