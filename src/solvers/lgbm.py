@@ -1,5 +1,4 @@
 from dataclasses import dataclass, asdict
-from pprint import pprint
 
 import numpy as np
 import pandas as pd
@@ -53,20 +52,31 @@ class LGBMSolver(ProblemSolver[LGBMParams]):
         self._gpu = gpu
 
     def solve(self, params: LGBMParams) -> ProblemSolution:
-        print("Starting LGBMSolver with parameters:")
-        pprint(params)
+        train_scores = []  # The accuracies on the train set of each fold.
+        oof_scores = []  # The accuracies on the validation set of each fold
 
-        train_scores = []
-        oof_scores = []
-        all_models = []
-        oof_predictions = np.zeros(len(self._y_train))
-        test_prediction_proba = np.zeros((len(self._x_test), params.n_splits))
+        # The probabilities of model b winning the competition. These probabilities are made by models trained each
+        # fold, the mean value of which will be the basis of the final predictions.
+        model_b_confidence = np.zeros((len(self._x_test), params.n_splits))
+
+        # Cross validation.
+        #
+        # Because the amount of data provided is not that huge, cross validation is applied to observe the model
+        # performance more precisely. Stratified K-fold validator is used to split the train data into folds with
+        # preserved percentage of samples for each class.
         cross_validator = StratifiedKFold(params.n_splits, shuffle=True, random_state=params.random_state)
-        with tqdm(total=params.n_splits, desc="Stratified K Fold") as progress:
+        with tqdm(total=params.n_splits, desc="Stratified K Fold") as progress:  # adds a progress bar
+            # On each fold, we train a model from the ground up, and collect statistics about the metrics.
             for fold, (train_index, validate_index) in enumerate(cross_validator.split(self._x_train, self._y_train)):
                 x_train, x_validate = self._x_train.iloc[train_index], self._x_train.iloc[validate_index]
                 y_train, y_validate = self._y_train.iloc[train_index], self._y_train.iloc[validate_index]
 
+                # The model parameters.
+                #
+                # LGBMParams contains not only the parameters needed by the underlying LGBMClassifier, but also some
+                # additional ones to control the behavior of solve(). We need to delete them before passing the
+                # params onto the model.
+                #
                 # noinspection PyTypeChecker
                 model_params = asdict(params)
                 del model_params["n_splits"]
@@ -74,26 +84,45 @@ class LGBMSolver(ProblemSolver[LGBMParams]):
                 # random_state is not del-ed here because there's also a parameter in LGBMClassifier with the same
                 # name, and is for reproducible results, too.
 
+                # Create and train the model.
+                #
+                # LGBMSolver utilizes the existing LGBMClassifier from "lightbgm" package. Early stopping feature is
+                # supported by passing a callback provided by the package. For every params.early_stop rounds,
+                # if the validation score doesn't improve by min_delta (in this case, 0.0), the training will be
+                # stopped.
                 model = LGBMClassifier(**model_params, verbose=-1, device="gpu" if self._gpu else "cpu")
                 callbacks = None
                 if params.early_stop > 0:
                     callbacks = [early_stopping(stopping_rounds=params.early_stop, verbose=False)]
                 model.fit(x_train, y_train, eval_set=[(x_validate, y_validate)], callbacks=callbacks)
 
-                predict_train, predict_validate = model.predict(x_train), model.predict(x_validate)
-                oof_predictions[validate_index] = predict_validate
+                # Test model and collect statistics.
+                #
+                # Once we've trained the model, we use it to predict on the train set and the validation set. The
+                # former is used to calculate the accuracy of the model on the train set, and the latter is collected
+                # to make a better OOF (out-of-fold) accuracy.
+                predict_train = model.predict(x_train)
+                predict_validate = model.predict(x_validate)
                 train_scores.append(accuracy_score(y_train, (predict_train > 0.5).astype(int)))
                 oof_scores.append(accuracy_score(y_validate, (predict_validate > 0.5).astype(int)))
-                test_prediction_proba[:, fold] = model.predict_proba(self._x_test)[:, 1]
 
-                print(f"Fold {fold}: Train accuracy {train_scores[-1]:.4f}, OOF accuracy {oof_scores[-1]:.4f}")
-                all_models.append(model)
+                # Make predictions.
+                #
+                # Predictions on the test set (which, in the competition, doesn't have a "right answer") are made in
+                # probabilities. The classification confidence of the category 1 ("mode_b" the winner) is collected,
+                # and the mean value of these probabilities will be the basis of the final prediction.
+                model_b_confidence[:, fold] = model.predict_proba(self._x_test)[:, 1]
+
+                # output train accuracy and OOF accuracy in the progress bar.
+                progress.set_postfix({"Train": f"{train_scores[-1]:.4f}", "OOF": f"{oof_scores[-1]:.4f}"})
                 progress.update()
 
+        # When the training is over, we take mean values of train accuracies and OOF accuracies as the final
+        # performance metrics.
         mean_train_scores = f"{np.mean(train_scores):.4f}"
         mean_oof_scores = f"{np.mean(oof_scores):.4f}"
         print(f"Overall Train accuracy {mean_train_scores}")
         print(f"Overall OOF accuracy {mean_oof_scores}")
 
-        mean_test_prediction_proba = test_prediction_proba.mean(axis=1)
-        return ProblemSolution(oof_predictions, mean_test_prediction_proba)
+        final_predictions = model_b_confidence.mean(axis=1).round().astype(int)
+        return ProblemSolution(final_predictions)

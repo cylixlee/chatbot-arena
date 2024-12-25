@@ -1,10 +1,8 @@
-import dataclasses
 import os.path
 import pickle
 import queue
 import warnings
 
-import numpy as np
 import pandas as pd
 import toml
 
@@ -172,11 +170,10 @@ def main() -> None:
     }
 
     solver = LGBMSolver(train, test, target_column="winner", gpu=False)
-    # noinspection PyTypeChecker
-    mean_oof_label, mean_test_label = dataclasses.astuple(solver.solve(LGBMParams(**params)))
+    predictions = solver.solve(LGBMParams(**params)).predictions
 
     sample = pd.read_csv(CONFIG["paths"]["sample"])
-    sample["winner"] = np.round(mean_test_label).astype("int")
+    sample["winner"] = predictions
     sample["winner"] = sample["winner"].map({0: "model_a", 1: "model_b"})
 
     sample.to_csv("submission_refactored.csv", index=False)

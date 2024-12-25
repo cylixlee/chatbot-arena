@@ -17,8 +17,7 @@ class ProblemSolution(object):
     For more details, see ProblemSolver.
     """
 
-    oof_predictions: np.ndarray
-    mean_test_prediction_proba: np.ndarray
+    predictions: np.ndarray
 
 
 class ProblemSolver(Generic[_TParams], ABC):
