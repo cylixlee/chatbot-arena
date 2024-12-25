@@ -175,7 +175,7 @@ def main() -> None:
     # noinspection PyTypeChecker
     mean_oof_label, mean_test_label = dataclasses.astuple(solver.solve(LGBMParams(**params)))
 
-    sample = pd.read_csv(CONFIG.paths.sample)
+    sample = pd.read_csv(CONFIG["paths"]["sample"])
     sample["winner"] = np.round(mean_test_label).astype("int")
     sample["winner"] = sample["winner"].map({0: "model_a", 1: "model_b"})
 
