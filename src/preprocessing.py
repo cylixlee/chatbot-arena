@@ -38,18 +38,10 @@ from dataclasses import dataclass
 import nltk
 import numpy as np
 import pandas as pd
+from nltk.corpus import stopwords
 from sklearn.feature_extraction.text import TfidfVectorizer
 from tqdm import tqdm
 from typing_extensions import override
-
-# The NLTK toolkit needs downloading before usage. Calling download every time is unnecessary, so here we first try
-# to import it, and download the data if the LookupError occurs.
-try:
-    from nltk.corpus import stopwords
-except LookupError:
-    nltk.download("stopwords")
-    from nltk.corpus import stopwords
-
 
 __all__ = [
     "PreprocessPipeline",
@@ -85,7 +77,14 @@ __all__ = [
 
 # The stopwords provided by NLTK. Transformed into a set (i.e. HashSet in other languages) to keep the words appear
 # once.
-_stopwords = set(stopwords.words("english"))
+#
+# The NLTK toolkit needs downloading before usage. Calling download every time is unnecessary, so here we first try
+# to import it, and download the data if the LookupError occurs.
+try:
+    _stopwords = set(stopwords.words("english"))
+except LookupError:
+    nltk.download("stopwords")
+    _stopwords = set(stopwords.words("english"))
 
 
 class PreprocessPipeline(ABC):
@@ -184,9 +183,9 @@ class SequentialOnColumns(PreprocessPipeline):
     _pipelines: list[ColumnPreprocessPipeline]
 
     def __init__(
-        self,
-        columns: list[str],
-        *pipelines: ColumnPreprocessPipeline,
+            self,
+            columns: list[str],
+            *pipelines: ColumnPreprocessPipeline,
     ) -> None:
         self._columns = columns
         self._pipelines = list(pipelines)
