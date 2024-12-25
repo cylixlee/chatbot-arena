@@ -1,15 +1,34 @@
 import dataclasses
+import os.path
+import pickle
 import queue
 import warnings
 
 import numpy as np
 import pandas as pd
+import toml
 
 from src.preprocessing import *
-from src.settings import load_environment_settings
 from src.solvers.lgbm import LGBMSolver, LGBMParams
 
-CONFIG = load_environment_settings("environment-settings.toml")
+
+def load_settings() -> dict:
+    with open("environment-settings.toml", encoding="utf-8") as file:
+        settings = toml.load(file)
+
+    enabled = settings["paths"]["enabled"]
+    found = False
+    for key, value in settings["paths"].items():
+        if key == enabled:
+            settings["paths"] = value
+            found = True
+            break
+    assert found, "invalid path settings"
+
+    return settings
+
+
+CONFIG = load_settings()
 
 
 def load_and_preprocess() -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -18,8 +37,18 @@ def load_and_preprocess() -> tuple[pd.DataFrame, pd.DataFrame]:
 
     Returns: a DataFrame containing the train data and the other containing test.
     """
-    train = pd.read_parquet(CONFIG.paths.train)
-    test = pd.read_parquet(CONFIG.paths.test)
+
+    if "cache" in CONFIG["paths"]:
+        cache_path = CONFIG["paths"]["cache"]
+    else:
+        cache_path = None
+
+    if cache_path and os.path.exists(cache_path):
+        with open(cache_path, "rb") as cache:
+            return pickle.load(cache)
+
+    train = pd.read_parquet(CONFIG["paths"]["train"])
+    test = pd.read_parquet(CONFIG["paths"]["test"])
 
     # Computation pipelines.
     #
@@ -114,7 +143,11 @@ def load_and_preprocess() -> tuple[pd.DataFrame, pd.DataFrame]:
         DropColumns("prompt", "response_a", "response_b"),
     )
 
-    return preprocess_train(train), preprocess_test(test)
+    train, test = preprocess_train(train), preprocess_test(test)
+    if cache_path and not os.path.exists(cache_path):
+        with open(cache_path, "wb") as cache:
+            pickle.dump((train, test), cache)
+    return train, test
 
 
 def main() -> None:
