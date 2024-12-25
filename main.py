@@ -124,7 +124,7 @@ def load_and_preprocess() -> tuple[pd.DataFrame, pd.DataFrame]:
     )
     # fmt: on
 
-    # Similar to process_train so we don't comment this one in detail.
+    # Similar to process_train. We don't comment this one in detail.
     preprocess_test = Sequential(
         DropColumns("model_a", "model_b", "language", "scored"),
         EnforceDType("id", "category"),
