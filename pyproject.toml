@@ -1,6 +1,6 @@
 [project]
 name = "chatbot-arena"
-version = "1.0.0"
+version = "1.1.0"
 description = "Coursework of Advanced Machine Learning, towards the WSDM Cup - Multilingual Chatbot Arena competition on Kaggle."
 authors = [
     { name = "Cylix Lee", email = "cylix.lee@outlook.com" },
@@ -16,6 +16,7 @@ dependencies = [
     "lightgbm>=4.5.0",
     "scikit-learn>=1.6.0",
     "toml>=0.10.2",
+    "textgo>=1.4",
 ]
 requires-python = ">=3.10"
 readme = "README.md"
@@ -24,6 +25,15 @@ license = { text = "GPLv3" }
 
 [tool.pdm]
 distribution = false
+
+[tool.pdm.resolution]
+respect-source-order = true
+
+[[tool.pdm.source]]
+name = "torch"
+url = "https://download.pytorch.org/whl/cpu"
+include_packages = ["torch", "torchvision", "torchaudio"]
+exclude_packages = ["*"]
 
 [tool.black]
 line-length = 120
