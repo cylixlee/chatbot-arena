@@ -1,3 +1,7 @@
+"""
+Module to provide some common paths as pathlib.Path objects.
+"""
+
 import pathlib
 
 __all__ = ["SOURCE_DIR", "PROJECT_DIR", "CACHE_DIR"]

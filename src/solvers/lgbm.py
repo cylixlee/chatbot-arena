@@ -47,6 +47,9 @@ class LGBMSolver(ProblemSolver[LGBMParams]):
     """
     A ProblemSolver using LightGBM Classifier from Microsoft.
 
+    This is not an OptunableProblemSolver, since this is the baseline model provided by Sheikh Muhammad Abdullah
+    (@abdmental01 on Kaggle).
+
     Note this solver does NOT support GPU, due to upstream internal reasons.
     """
 
