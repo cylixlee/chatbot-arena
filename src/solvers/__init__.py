@@ -92,7 +92,7 @@ class ProblemSolver(Generic[_TParams], ABC):
         pass
 
 
-class OptunableProblemSolver(Generic[_TParams], ProblemSolver[_TParams], ABC):
+class OptunableProblemSolver(ProblemSolver[_TParams], ABC):
     """
     Solvers whose hyperparameters can be tuned by optuna.
 
