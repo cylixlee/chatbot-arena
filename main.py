@@ -1,12 +1,8 @@
-import os.path
-import pickle
-import queue
 import warnings
 
 import pandas as pd
 import toml
 
-from src.preprocessing import *
 from src.solvers.lgbm import LGBMSolver, LGBMParams
 
 
@@ -29,130 +25,14 @@ def load_settings() -> dict:
 CONFIG = load_settings()
 
 
-def load_and_preprocess() -> tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    Load the data from binaries (i.e. parquet files) and perform preprocessing operations on them.
-
-    Returns: a DataFrame containing the train data and the other containing test.
-    """
-
-    if "cache" in CONFIG["paths"]:
-        cache_path = CONFIG["paths"]["cache"]
-    else:
-        cache_path = None
-
-    if cache_path and os.path.exists(cache_path):
-        with open(cache_path, "rb") as cache:
-            return pickle.load(cache)
-
-    train = pd.read_parquet(CONFIG["paths"]["train"])
-    test = pd.read_parquet(CONFIG["paths"]["test"])
-
-    # Computation pipelines.
-    #
-    # There are 3 text column in the data: "prompt", "response_a" and "response_b". The computation part is to
-    # compute the features of those text columns manually (e.g. word count, average word length, etc.) and create new
-    # columns to store them.
-    #
-    # Those new columns will be passed to the model training as input features.
-    computation_pipeline = Sequential(
-        # do computations sequentially on those three text columns.
-        SequentialOnColumns(
-            ["prompt", "response_a", "response_b"],
-            ComputeLength(),
-            ComputeWordCount(),
-            ComputeCharCount(),
-            ComputeAverageWordLength(),
-            ComputePunctuationCount(),
-            ComputeCapitalizedCount(),
-            ComputeSpecialCharCount(),
-            ComputeStopwordsCount(),
-            ComputeUniqueWordCount(),
-            ComputeLexicalDiversity(),
-            ComputeWordLengthMean(),
-            ComputeWordLengthMedian(),
-            ComputeWordLengthMax(),
-            ComputeWordLengthMin(),
-            ComputeSentenceLengthMean(),
-            ComputeSentenceLengthMedian(),
-            ComputeSentenceLengthMax(),
-            ComputeSentenceLengthMin(),
-        ),
-        # moreover, the difference and ratio between two responses are computed.
-        ComputeResponseLengthDifference(),
-        ComputeResponseLengthRatio(),
-    )
-
-    # the queue storing TfidfVectorizers, for PairedVectorizationByTfidf pipeline.
-    vectorizer_queue = queue.Queue()
-
-    # fmt: off
-    preprocess_train = Sequential(
-        # Transformation.
-        #
-        # Data transformations are done here, for example, transforming the winners ("model_a", "model_b") into
-        # numbers (0 or 1), since this is a classification task.
-        MapColumnValues("winner", {"model_a": 0, "model_b": 1}),
-        DropColumns("model_a", "model_b", "language", "scored"),
-        EnforceDType("id", "category"),
-
-        # Computation.
-        #
-        # Former defined computation pipelines are applied here. We define them separately because they can be reused
-        # in the preprocess_text pipeline.
-        computation_pipeline,
-
-        # Vectorization.
-        #
-        # Besides the computed features, we still need to feed the original texts to models, in some form.
-        # Vectorization is the solution: we use vectorizer to transform the text into numbers, and then take them as
-        # input features.
-        #
-        # The inner principle of vectorizer is not discussed here. We just import and call them.
-        SequentialOnColumns(
-            ["prompt", "response_a", "response_b"],
-            PairedVectorizationByTfidf(
-                vectorizer_queue,
-                fit_transform=True,
-                analyzer="char_wb",
-                max_features=3000,
-            ),
-        ),
-
-        # since we've vectorized the text columns, we no longer need them.
-        DropColumns("prompt", "response_a", "response_b"),
-    )
-    # fmt: on
-
-    # Similar to process_train. We don't comment this one in detail.
-    preprocess_test = Sequential(
-        DropColumns("model_a", "model_b", "language", "scored"),
-        EnforceDType("id", "category"),
-        computation_pipeline,
-        SequentialOnColumns(
-            ["prompt", "response_a", "response_b"],
-            PairedVectorizationByTfidf(
-                vectorizer_queue,
-                fit_transform=False,
-                analyzer="char_wb",
-                max_features=3000,
-            ),
-        ),
-        DropColumns("prompt", "response_a", "response_b"),
-    )
-
-    train, test = preprocess_train(train), preprocess_test(test)
-    if cache_path and not os.path.exists(cache_path):
-        with open(cache_path, "wb") as cache:
-            # noinspection PyTypeChecker
-            pickle.dump((train, test), cache)
-    return train, test
-
-
 def main() -> None:
     with warnings.catch_warnings():  # warnings in preprocessing stage are ignored.
         warnings.simplefilter("ignore")
-        train, test = load_and_preprocess()
+        solver = LGBMSolver(
+            CONFIG["paths"]["train"],
+            CONFIG["paths"]["test"],
+            target_column="winner",
+        )
 
     params = {
         "n_estimators": 2083,
@@ -170,7 +50,6 @@ def main() -> None:
         "random_state": 42,
     }
 
-    solver = LGBMSolver(train, test, target_column="winner", gpu=False)
     predictions = solver.solve(LGBMParams(**params)).predictions
 
     sample = pd.read_csv(CONFIG["paths"]["sample"])

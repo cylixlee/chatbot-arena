@@ -1,3 +1,5 @@
+import os
+import queue
 from dataclasses import dataclass, asdict
 
 import numpy as np
@@ -7,7 +9,9 @@ from lightgbm.callback import early_stopping
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import StratifiedKFold
 from tqdm import tqdm
+from typing_extensions import override
 
+from src.preprocessing import *
 from src.solvers import ProblemSolver, ProblemSolution
 
 __all__ = ["LGBMParams", "LGBMSolver"]
@@ -50,14 +54,116 @@ class LGBMSolver(ProblemSolver[LGBMParams]):
     _y_train: pd.DataFrame
     _x_test: pd.DataFrame
 
-    def __init__(self, train: pd.DataFrame, test: pd.DataFrame, target_column: str) -> None:
+    def __init__(self, train: str | os.PathLike, test: str | os.PathLike, target_column: str) -> None:
+        train, test = self.preprocess_cached(train, test)
         self._x_train = train.drop(target_column, axis=1)
         self._y_train = train[target_column]
         self._x_test = test
 
+    @override
+    def preprocess_raw(self, train: str | os.PathLike, test: str | os.PathLike) -> tuple[pd.DataFrame, pd.DataFrame]:
+        train = pd.read_parquet(train)
+        test = pd.read_parquet(test)
+
+        # Computation pipelines.
+        #
+        # There are 3 text column in the data: "prompt", "response_a" and "response_b". The computation part is to
+        # compute the features of those text columns manually (e.g. word count, average word length, etc.) and create
+        # new columns to store them.
+        #
+        # Those new columns will be passed to the model training as input features.
+        computation_pipeline = Sequential(
+            # do computations sequentially on those three text columns.
+            SequentialOnColumns(
+                ["prompt", "response_a", "response_b"],
+                ComputeLength(),
+                ComputeWordCount(),
+                ComputeCharCount(),
+                ComputeAverageWordLength(),
+                ComputePunctuationCount(),
+                ComputeCapitalizedCount(),
+                ComputeSpecialCharCount(),
+                ComputeStopwordsCount(),
+                ComputeUniqueWordCount(),
+                ComputeLexicalDiversity(),
+                ComputeWordLengthMean(),
+                ComputeWordLengthMedian(),
+                ComputeWordLengthMax(),
+                ComputeWordLengthMin(),
+                ComputeSentenceLengthMean(),
+                ComputeSentenceLengthMedian(),
+                ComputeSentenceLengthMax(),
+                ComputeSentenceLengthMin(),
+            ),
+            # moreover, the difference and ratio between two responses are computed.
+            ComputeResponseLengthDifference(),
+            ComputeResponseLengthRatio(),
+        )
+
+        # the queue storing TfidfVectorizers, for PairedVectorizationByTfidf pipeline.
+        vectorizer_queue = queue.Queue()
+
+        # fmt: off
+        preprocess_train = Sequential(
+            # Transformation.
+            #
+            # Data transformations are done here, for example, transforming the winners ("model_a", "model_b") into
+            # numbers (0 or 1), since this is a classification task.
+            MapColumnValues("winner", {"model_a": 0, "model_b": 1}),
+            DropColumns("model_a", "model_b", "language", "scored"),
+            EnforceDType("id", "category"),
+
+            # Computation.
+            #
+            # Former defined computation pipelines are applied here. We define them separately because they can be
+            # reused in the preprocess_text pipeline.
+            computation_pipeline,
+
+            # Vectorization.
+            #
+            # Besides the computed features, we still need to feed the original texts to models, in some form.
+            # Vectorization is the solution: we use vectorizer to transform the text into numbers, and then take them as
+            # input features.
+            #
+            # The inner principle of vectorizer is not discussed here. We just import and call them.
+            SequentialOnColumns(
+                ["prompt", "response_a", "response_b"],
+                PairedVectorizationByTfidf(
+                    vectorizer_queue,
+                    fit_transform=True,
+                    analyzer="char_wb",
+                    max_features=3000,
+                ),
+            ),
+
+            # since we've vectorized the text columns, we no longer need them.
+            DropColumns("prompt", "response_a", "response_b"),
+        )
+        # fmt: on
+
+        # Similar to process_train. We don't comment this one in detail.
+        preprocess_test = Sequential(
+            DropColumns("model_a", "model_b", "language", "scored"),
+            EnforceDType("id", "category"),
+            computation_pipeline,
+            SequentialOnColumns(
+                ["prompt", "response_a", "response_b"],
+                PairedVectorizationByTfidf(
+                    vectorizer_queue,
+                    fit_transform=False,
+                    analyzer="char_wb",
+                    max_features=3000,
+                ),
+            ),
+            DropColumns("prompt", "response_a", "response_b"),
+        )
+
+        return preprocess_train(train), preprocess_test(test)
+
+    @override
     def solve(self, params: LGBMParams) -> ProblemSolution:
-        train_scores = []  # The accuracies on the train set of each fold.
-        oof_scores = []  # The accuracies on the validation set of each fold
+        train_accuracies = []  # The accuracies on the train set of each fold.
+        oof_accuracies = []  # The accuracies on the validation set of each fold
 
         # The probabilities of model b winning the competition. These probabilities are made by models trained each
         # fold, the mean value of which will be the basis of the final predictions.
@@ -90,7 +196,7 @@ class LGBMSolver(ProblemSolver[LGBMParams]):
 
                 # Create and train the model.
                 #
-                # LGBMSolver utilizes the existing LGBMClassifier from "lightbgm" package. Early stopping feature is
+                # LGBMSolver utilizes the existing LGBMClassifier from "LightGBM" package. Early stopping feature is
                 # supported by passing a callback provided by the package. For every params.early_stop rounds,
                 # if the validation score doesn't improve by min_delta (in this case, 0.0), the training will be
                 # stopped.
@@ -107,8 +213,8 @@ class LGBMSolver(ProblemSolver[LGBMParams]):
                 # to make a better OOF (out-of-fold) accuracy.
                 predict_train = model.predict(x_train)
                 predict_validate = model.predict(x_validate)
-                train_scores.append(accuracy_score(y_train, (predict_train > 0.5).astype(int)))
-                oof_scores.append(accuracy_score(y_validate, (predict_validate > 0.5).astype(int)))
+                train_accuracies.append(accuracy_score(y_train, (predict_train > 0.5).astype(int)))
+                oof_accuracies.append(accuracy_score(y_validate, (predict_validate > 0.5).astype(int)))
 
                 # Make predictions.
                 #
@@ -118,15 +224,15 @@ class LGBMSolver(ProblemSolver[LGBMParams]):
                 model_b_confidence[:, fold] = model.predict_proba(self._x_test)[:, 1]
 
                 # output train accuracy and OOF accuracy in the progress bar.
-                progress.set_postfix({"Train": f"{train_scores[-1]:.4f}", "OOF": f"{oof_scores[-1]:.4f}"})
+                progress.set_postfix({"Train": f"{train_accuracies[-1]:.4f}", "OOF": f"{oof_accuracies[-1]:.4f}"})
                 progress.update()
 
         # When the training is over, we take mean values of train accuracies and OOF accuracies as the final
         # performance metrics.
-        mean_train_scores = f"{np.mean(train_scores):.4f}"
-        mean_oof_scores = f"{np.mean(oof_scores):.4f}"
-        print(f"Overall Train accuracy {mean_train_scores}")
-        print(f"Overall OOF accuracy {mean_oof_scores}")
+        mean_train_accuracy = np.mean(train_accuracies)
+        mean_oof_accuracy = np.mean(oof_accuracies)
+        print(f"Overall Train accuracy {mean_train_accuracy:.4f}")
+        print(f"Overall OOF accuracy {mean_oof_accuracy:.4f}")
 
         final_predictions = model_b_confidence.mean(axis=1).round().astype(int)
-        return ProblemSolution(final_predictions)
+        return ProblemSolution(mean_oof_accuracy, final_predictions)

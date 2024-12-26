@@ -1,10 +1,16 @@
+import os
+import pickle
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TypeVar, Generic
+from typing import TypeVar, Generic, final
 
 import numpy as np
 
+from src.relativepath import CACHE_DIR
+
 __all__ = ["ProblemSolution", "ProblemSolver"]
+
+import pandas as pd
 
 _TParams = TypeVar("_TParams")
 
@@ -17,6 +23,7 @@ class ProblemSolution(object):
     For more details, see ProblemSolver.
     """
 
+    accuracy: float
     predictions: np.ndarray
 
 
@@ -30,6 +37,21 @@ class ProblemSolver(Generic[_TParams], ABC):
     test dataset. A ProblemSolution is returned, which contains the prediction, accuracy, and some extra data to tell
     the optuna how this trial doing.
     """
+
+    @abstractmethod
+    def preprocess_raw(self, train: str | os.PathLike, test: str | os.PathLike) -> tuple[pd.DataFrame, pd.DataFrame]:
+        pass
+
+    @final
+    def preprocess_cached(self, train: str | os.PathLike, test: str | os.PathLike) -> tuple[pd.DataFrame, pd.DataFrame]:
+        cache_path = CACHE_DIR / self.__class__.__qualname__
+        if cache_path.exists():
+            with open(cache_path, "rb") as cache:
+                return pickle.load(cache)
+        data = self.preprocess_raw(train, test)
+        with open(cache_path, "wb") as cache:
+            pickle.dump(data, cache)
+        return data
 
     @abstractmethod
     def solve(self, params: _TParams) -> ProblemSolution:
