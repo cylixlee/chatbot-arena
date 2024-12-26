@@ -40,16 +40,20 @@ class LGBMParams(object):
 
 
 class LGBMSolver(ProblemSolver[LGBMParams]):
+    """
+    A ProblemSolver using LightGBM Classifier from Microsoft.
+
+    Note this solver does NOT support GPU, due to upstream internal reasons.
+    """
+
     _x_train: pd.DataFrame
     _y_train: pd.DataFrame
     _x_test: pd.DataFrame
-    _gpu: bool
 
-    def __init__(self, train: pd.DataFrame, test: pd.DataFrame, target_column: str, gpu: bool) -> None:
+    def __init__(self, train: pd.DataFrame, test: pd.DataFrame, target_column: str) -> None:
         self._x_train = train.drop(target_column, axis=1)
         self._y_train = train[target_column]
         self._x_test = test
-        self._gpu = gpu
 
     def solve(self, params: LGBMParams) -> ProblemSolution:
         train_scores = []  # The accuracies on the train set of each fold.
@@ -90,7 +94,7 @@ class LGBMSolver(ProblemSolver[LGBMParams]):
                 # supported by passing a callback provided by the package. For every params.early_stop rounds,
                 # if the validation score doesn't improve by min_delta (in this case, 0.0), the training will be
                 # stopped.
-                model = LGBMClassifier(**model_params, verbose=-1, device="gpu" if self._gpu else "cpu")
+                model = LGBMClassifier(**model_params, verbose=-1)
                 callbacks = None
                 if params.early_stop > 0:
                     callbacks = [early_stopping(stopping_rounds=params.early_stop, verbose=False)]

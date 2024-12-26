@@ -144,6 +144,7 @@ def load_and_preprocess() -> tuple[pd.DataFrame, pd.DataFrame]:
     train, test = preprocess_train(train), preprocess_test(test)
     if cache_path and not os.path.exists(cache_path):
         with open(cache_path, "wb") as cache:
+            # noinspection PyTypeChecker
             pickle.dump((train, test), cache)
     return train, test
 
