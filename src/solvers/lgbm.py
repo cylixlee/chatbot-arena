@@ -32,7 +32,7 @@ class LGBMParams(object):
     lambda_l2: float
     min_gain_to_split: float
 
-    # Additional parameters used by the LGBMSolver itself.
+    # Additional parameters used by the LGBMSolver.pickle itself.
     early_stop: int
     """ Early stopping rounds, only applied when positive. """
 
@@ -50,18 +50,9 @@ class LGBMSolver(ProblemSolver[LGBMParams]):
     Note this solver does NOT support GPU, due to upstream internal reasons.
     """
 
-    _x_train: pd.DataFrame
-    _y_train: pd.DataFrame
-    _x_test: pd.DataFrame
-
-    def __init__(self, train: str | os.PathLike, test: str | os.PathLike, target_column: str) -> None:
-        train, test = self.preprocess_cached(train, test)
-        self._x_train = train.drop(target_column, axis=1)
-        self._y_train = train[target_column]
-        self._x_test = test
-
+    @classmethod
     @override
-    def preprocess_raw(self, train: str | os.PathLike, test: str | os.PathLike) -> tuple[pd.DataFrame, pd.DataFrame]:
+    def preprocess_raw(cls, train: str | os.PathLike, test: str | os.PathLike) -> tuple[pd.DataFrame, pd.DataFrame]:
         train = pd.read_parquet(train)
         test = pd.read_parquet(test)
 
@@ -160,6 +151,16 @@ class LGBMSolver(ProblemSolver[LGBMParams]):
 
         return preprocess_train(train), preprocess_test(test)
 
+    _x_train: pd.DataFrame
+    _y_train: pd.DataFrame
+    _x_test: pd.DataFrame
+
+    def __init__(self, train: str | os.PathLike, test: str | os.PathLike, target_column: str) -> None:
+        train, test = self.__class__.preprocess_cached(train, test)
+        self._x_train = train.drop(target_column, axis=1)
+        self._y_train = train[target_column]
+        self._x_test = test
+
     @override
     def solve(self, params: LGBMParams) -> ProblemSolution:
         train_accuracies = []  # The accuracies on the train set of each fold.
@@ -196,9 +197,9 @@ class LGBMSolver(ProblemSolver[LGBMParams]):
 
                 # Create and train the model.
                 #
-                # LGBMSolver utilizes the existing LGBMClassifier from "LightGBM" package. Early stopping feature is
-                # supported by passing a callback provided by the package. For every params.early_stop rounds,
-                # if the validation score doesn't improve by min_delta (in this case, 0.0), the training will be
+                # LGBMSolver.pickle utilizes the existing LGBMClassifier from "LightGBM" package. Early stopping
+                # feature is supported by passing a callback provided by the package. For every params.early_stop
+                # rounds, if the validation score doesn't improve by min_delta (in this case, 0.0), the training will be
                 # stopped.
                 model = LGBMClassifier(**model_params, verbose=-1)
                 callbacks = None

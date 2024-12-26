@@ -3,11 +3,12 @@ import warnings
 import pandas as pd
 import toml
 
+from src.relativepath import PROJECT_DIR
 from src.solvers.lgbm import LGBMSolver, LGBMParams
 
 
 def load_settings() -> dict:
-    with open("environment-settings.toml", encoding="utf-8") as file:
+    with open(PROJECT_DIR / "environment-settings.toml", encoding="utf-8") as file:
         settings = toml.load(file)
 
     enabled = settings["paths"]["enabled"]
