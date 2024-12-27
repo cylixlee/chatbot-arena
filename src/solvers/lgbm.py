@@ -179,7 +179,7 @@ class LGBMSolver(ProblemSolver[LGBMParams]):
         # performance more precisely. Stratified K-fold validator is used to split the train data into folds with
         # preserved percentage of samples for each class.
         cross_validator = StratifiedKFold(params.n_splits, shuffle=True, random_state=params.random_state)
-        with tqdm(total=params.n_splits, desc="Stratified K Fold") as progress:  # adds a progress bar
+        with tqdm(total=params.n_splits, desc="StratifiedKFold", leave=False) as progress:  # adds a progress bar
             # On each fold, we train a model from the ground up, and collect statistics about the metrics.
             for fold, (train_index, validate_index) in enumerate(cross_validator.split(self._x_train, self._y_train)):
                 x_train, x_validate = self._x_train.iloc[train_index], self._x_train.iloc[validate_index]
@@ -239,4 +239,5 @@ class LGBMSolver(ProblemSolver[LGBMParams]):
         print(f"Overall OOF accuracy {mean_oof_accuracy:.4f}")
 
         final_predictions = model_b_confidence.mean(axis=1).round().astype(int)
+        # noinspection PyTypeChecker
         return ProblemSolution(mean_oof_accuracy, final_predictions)

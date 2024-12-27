@@ -70,6 +70,7 @@ def optune_solver(solver: OptunableProblemSolver, n_trials: int, *args, **kwargs
         "params": study.best_params,
     }
     with open(_PARAM_CACHE_PATH, "w", encoding="utf-8") as cache:
+        # noinspection PyTypeChecker
         toml.dump(param_cache, cache)
 
     # Finally, the best accuracy is returned.

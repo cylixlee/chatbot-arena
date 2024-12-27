@@ -72,6 +72,7 @@ class ProblemSolver(Generic[_TParams], ABC):
                 return pickle.load(cache)
         data = cls.preprocess_raw(train, test)
         with open(cache_path, "wb") as cache:
+            # noinspection PyTypeChecker
             pickle.dump(data, cache)
         return data
 
