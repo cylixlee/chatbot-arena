@@ -2,9 +2,8 @@ import warnings
 
 import toml
 
-from src.optuning import optune_solver
 from src.relativepath import PROJECT_DIR
-from src.solvers.logistic_regression import LogisticRegressionSolver
+from src.solvers.logistic_regression import LogisticRegressionSolver, LogisticRegressionParams
 
 
 def load_settings() -> dict:
@@ -35,7 +34,15 @@ def main() -> None:
             target_column="winner",
         )
 
-    optune_solver(solver, n_trials=100, n_splits=5, epochs=100, random_state=42)
+    solver.solve(
+        LogisticRegressionParams(
+            middle_features=1024,
+            learning_rate=0.001,
+            n_splits=5,
+            epochs=100,
+            random_state=42,
+        )
+    )
 
 
 # Guideline recommended Main Guard

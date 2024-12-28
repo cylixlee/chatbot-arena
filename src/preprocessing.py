@@ -40,6 +40,7 @@ import numpy as np
 import pandas as pd
 from nltk.corpus import stopwords
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.preprocessing import MinMaxScaler
 from tqdm import tqdm
 from typing_extensions import override
 
@@ -73,6 +74,9 @@ __all__ = [
     "ComputeResponseLengthRatio",
     "ProgressiveVectorizationByTfidf",
     "PairedVectorizationByTfidf",
+    "MinMaxScale",
+    "MinMaxScaleAll",
+    "DropNaN",
 ]
 
 # The stopwords provided by NLTK. Transformed into a set (i.e. HashSet in other languages) to keep the words appear
@@ -182,11 +186,7 @@ class SequentialOnColumns(PreprocessPipeline):
     _columns: list[str]
     _pipelines: list[ColumnPreprocessPipeline]
 
-    def __init__(
-            self,
-            columns: list[str],
-            *pipelines: ColumnPreprocessPipeline,
-    ) -> None:
+    def __init__(self, columns: list[str], *pipelines: ColumnPreprocessPipeline) -> None:
         self._columns = columns
         self._pipelines = list(pipelines)
 
@@ -463,3 +463,32 @@ class PairedVectorizationByTfidf(ColumnPreprocessPipeline):
         )
         frame = pd.concat([frame, series], axis=1)
         return frame
+
+
+class MinMaxScale(ColumnPreprocessPipeline):
+    _scaler: MinMaxScaler
+
+    def __init__(self, feature_range: tuple[float, float] = (0, 1)) -> None:
+        self._scaler = MinMaxScaler(feature_range)
+
+    @override
+    def __call__(self, frame: pd.DataFrame, column: str) -> pd.DataFrame:
+        frame[[column]] = self._scaler.fit_transform(frame[[column]])
+        return frame
+
+
+class MinMaxScaleAll(PreprocessPipeline):
+    _scaler: MinMaxScaler
+
+    def __init__(self, feature_range: tuple[float, float] = (0, 1)) -> None:
+        self._scaler = MinMaxScaler(feature_range)
+
+    @override
+    def __call__(self, frame: pd.DataFrame) -> pd.DataFrame:
+        frame[:] = self._scaler.fit_transform(frame[:])
+        return frame
+
+
+class DropNaN(PreprocessPipeline):
+    def __call__(self, frame: pd.DataFrame) -> pd.DataFrame:
+        return frame.dropna()

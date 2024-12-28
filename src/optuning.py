@@ -52,7 +52,7 @@ def optune_solver(solver: OptunableProblemSolver, n_trials: int, *args, **kwargs
             return solution.accuracy
 
         # Now we've defined everything, just let optuna optimize it.
-        study.optimize(optimize_step, n_trials, callbacks=[update_progressbar_callback])
+        study.optimize(optimize_step, n_trials, callbacks=[update_progressbar_callback], gc_after_trial=True)
 
     # After optimization, the accuracy and parameters will be cached, in TOML format.
     if not _PARAM_CACHE_PATH.exists():

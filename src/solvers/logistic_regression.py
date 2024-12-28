@@ -98,6 +98,7 @@ class LogisticRegressionSolver(OptunableProblemSolver[LogisticRegressionParams])
             #
             # Data transformations are done here, for example, transforming the winners ("model_a", "model_b") into
             # numbers (0 or 1), since this is a classification task.
+            DropNaN(),
             MapColumnValues("winner", {"model_a": 0, "model_b": 1}),
             DropColumns("model_a", "model_b", "language", "scored", "id"),
 
@@ -126,11 +127,14 @@ class LogisticRegressionSolver(OptunableProblemSolver[LogisticRegressionParams])
 
             # since we've vectorized the text columns, we no longer need them.
             DropColumns("prompt", "response_a", "response_b"),
+            DropNaN(),
+            MinMaxScaleAll(),
         )
         # fmt: on
 
         # Similar to process_train. We don't comment this one in detail.
         preprocess_test = Sequential(
+            DropNaN(),
             DropColumns("model_a", "model_b", "language", "scored", "id"),
             computation_pipeline,
             SequentialOnColumns(
@@ -143,6 +147,8 @@ class LogisticRegressionSolver(OptunableProblemSolver[LogisticRegressionParams])
                 ),
             ),
             DropColumns("prompt", "response_a", "response_b"),
+            DropNaN(),
+            MinMaxScaleAll(),
         )
 
         return preprocess_train(train), preprocess_test(test)
@@ -174,7 +180,7 @@ class LogisticRegressionSolver(OptunableProblemSolver[LogisticRegressionParams])
         # # The probabilities of model b winning the competition. These probabilities are made by models trained each
         # # fold, the mean value of which will be the basis of the final predictions.
         # model_b_confidence = np.zeros((len(self._x_test), params.n_splits))
-        regression_confidence = torch.zeros((len(self._x_test), params.n_splits))
+        regression_confidence = []
 
         cross_validator = StratifiedKFold(params.n_splits, shuffle=True, random_state=params.random_state)
         with tqdm(total=params.n_splits, desc="StratifiedKFold", leave=False) as progress:  # adds a progress bar
@@ -183,28 +189,28 @@ class LogisticRegressionSolver(OptunableProblemSolver[LogisticRegressionParams])
                 y_train, y_validate = self._y_train[train_index], self._y_train[validate_index]
 
                 x_train = torch.from_numpy(x_train).to(self._device)
-                y_train = torch.from_numpy(y_train).to(self._device).view(-1, 1)
+                y_train = torch.from_numpy(y_train).to(self._device)
                 x_validate = torch.from_numpy(x_validate).to(self._device)
-                y_validate = torch.from_numpy(y_validate).to(self._device).view(-1, 1)
+                y_validate = torch.from_numpy(y_validate).to(self._device)
 
                 model = LogisticRegressor(x_train.shape[1], params.middle_features).to(self._device)
-                criterion = nn.BCEWithLogitsLoss()
+                criterion = nn.BCEWithLogitsLoss().to(self._device)
                 optimizer = optim.Adam(model.parameters(), lr=params.learning_rate)
 
                 model.train()
                 for _ in trange(params.epochs, desc="Epoch", leave=False):
-                    y_predict = model(x_train)
+                    y_predict = model(x_train).view(-1)
                     loss = criterion(y_predict, y_train)
                     optimizer.zero_grad()
                     loss.backward()
                     optimizer.step()
 
-                predict_train = F.sigmoid(model(x_train)).floor()
+                predict_train = F.sigmoid(model(x_train).view(-1)).floor()
                 correct_train = torch.eq(predict_train, y_train).sum().item()
                 train_accuracy = correct_train / len(x_train)
                 train_accuracies.append(train_accuracy)
 
-                predict_validate = F.sigmoid(model(x_validate)).floor()
+                predict_validate = F.sigmoid(model(x_validate).view(-1)).floor()
                 correct_validate = torch.eq(predict_validate, y_validate).sum().item()
                 validate_accuracy = correct_validate / len(x_validate)
                 oof_accuracies.append(validate_accuracy)
@@ -220,8 +226,8 @@ class LogisticRegressionSolver(OptunableProblemSolver[LogisticRegressionParams])
                 # # output train accuracy and OOF accuracy in the progress bar.
                 # progress.set_postfix({"Train": f"{train_accuracies[-1]:.4f}", "OOF": f"{oof_accuracies[-1]:.4f}"})
                 model.eval()
-                confidence = F.sigmoid(model(self._x_test))
-                regression_confidence[:, fold] = confidence
+                confidence = F.sigmoid(model(self._x_test).view(-1))
+                regression_confidence.append(confidence)
 
                 progress.set_postfix({"Train": f"{train_accuracy:.4f}", "OOF": f"{validate_accuracy:.4f}"})
                 progress.update()
@@ -233,6 +239,6 @@ class LogisticRegressionSolver(OptunableProblemSolver[LogisticRegressionParams])
         print(f"Overall Train accuracy {mean_train_accuracy:.4f}")
         print(f"Overall OOF accuracy {mean_oof_accuracy:.4f}")
 
-        final_predictions = regression_confidence.mean(dim=1).round().to(torch.int).numpy()
+        final_predictions = torch.stack(regression_confidence).mean(dim=1).round().to(torch.int).cpu().numpy()
         # noinspection PyTypeChecker
         return ProblemSolution(mean_oof_accuracy, final_predictions)
