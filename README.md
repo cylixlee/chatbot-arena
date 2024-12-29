@@ -7,8 +7,6 @@
     This project aims at the competition <em><a href="https://www.kaggle.com/competitions/wsdm-cup-multilingual-chatbot-arena">WSDM Cup - Multilingual Chatbot Arena</a></em> on Kaggle. In short, conversations between a user and two LLMs are given and this competition challenges us to predict which responses users will prefer.
   </div>
 
-  <div style="flex-grow: 1"></div>
-
   <a href="https://www.kaggle.com/competitions/wsdm-cup-multilingual-chatbot-arena">
     <img src="readme-assets/header.png" style="max-width: 200px; display: inline; border-radius: 4px; margin: 8px" />
   </a>
@@ -23,6 +21,7 @@
   - [Reference](#reference)
   - [Project Structure](#project-structure)
     - [Preprocessing Module](#preprocessing-module)
+    - [Solvers Module](#solvers-module)
     - [Optuning Module](#optuning-module)
   - [Build system](#build-system)
   - [Build with pip](#build-with-pip)
@@ -93,6 +92,31 @@ After those preprocessing steps, the original data is transformed into a `DataFr
 > ```
 >
 > In addition to processing the data, pipelines pass the processed data further along the chain. The data travels along the chain until all pipeline have had a chance to process it. The pipelines can be added, removed, reordered and reused in other processing steps (e.g. the processing pipeline in `LGBMSolver` can be easily reused in `LinearRegressionSolver`), without writing some column-assignment boilerplate.
+
+### Solvers Module
+The solvers module is the core abstraction of this project.
+
+A `ProblemSolver` is an object that stores data at creation, takes a corresponding `Params` object when `solve()` is called and returns a `ProblemSolution` object when done solving the problem.
+
+```mermaid
+
+graph LR
+
+D[Data]
+S[Problem Solution]
+
+subgraph SOLVER[Problem Solver]
+  direction TB
+
+  P[Params]
+  F["solve()"]
+
+  P --> F
+end
+
+D --> SOLVER
+SOLVER --> S
+```
 
 ### Optuning Module
 This module is aimed at utilizing the [`optuna`](https://optuna.org/) package to choose the best hyperparameters automatically.
