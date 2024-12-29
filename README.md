@@ -1,6 +1,6 @@
 # chatbot-arena
 
-Coursework of <em>Advanced Machine Learning</em> of NJUST.
+Coursework of *Advanced Machine Learning* of NJUST.
 
 
 This project aims at the competition [WSDM Cup - Multilingual Chatbot Arena](https://www.kaggle.com/competitions/wsdm-cup-multilingual-chatbot-arena) on Kaggle. In short, conversations between a user and two LLMs are given, and this competition challenges us to predict which responses users will prefer.
@@ -111,8 +111,37 @@ D --> SOLVER
 SOLVER --> S
 ```
 
+Different solver implements the `solve` method differently. For example, `LGBMSolver` trains multiple models using Stratified K-Fold strategy, and using those models to make predictions together. 
+
 ### Optuning Module
 This module is aimed at utilizing the [`optuna`](https://optuna.org/) package to choose the best hyperparameters automatically.
+
+Solvers are designed to be called multiple times, and hyperparameters are passed in the `Params` object. This means we can easily **generate** hyperparameters and test how they perform on a specific problem solver using `optuna`.
+
+```mermaid
+
+flowchart LR
+
+D[Data]
+B[Best Parameters]
+
+subgraph O[Optuna]
+  direction LR
+
+  H[Hyperparameters]
+  S[Solver]
+  C{After N Trials?}
+
+  H --> S
+  S --> C
+  C --No, generate new--> H
+end
+
+D --> O
+C --Yes, return--> B
+
+```
+
 
 ## Build system
 This project adopts [PDM](https://pdm-project.org/) as build system. Modern build systems (like PDM) are preferred over vanilla `pip` tool, because PDM handles virtual environment & package management automatically and correctly.
