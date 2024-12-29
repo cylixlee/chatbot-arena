@@ -1,16 +1,9 @@
 # chatbot-arena
 
-<div style="display: flex; flex-direction: row; margin-bottom: 16px; align-items: center;">
-  <div>
-    Coursework of <em>Advanced Machine Learning</em> of NJUST.
-    <br/> <br/>
-    This project aims at the competition <em><a href="https://www.kaggle.com/competitions/wsdm-cup-multilingual-chatbot-arena">WSDM Cup - Multilingual Chatbot Arena</a></em> on Kaggle. In short, conversations between a user and two LLMs are given and this competition challenges us to predict which responses users will prefer.
-  </div>
+Coursework of <em>Advanced Machine Learning</em> of NJUST.
 
-  <a href="https://www.kaggle.com/competitions/wsdm-cup-multilingual-chatbot-arena">
-    <img src="readme-assets/header.png" style="max-width: 200px; display: inline; border-radius: 4px; margin: 8px" />
-  </a>
-</div>
+
+This project aims at the competition [WSDM Cup - Multilingual Chatbot Arena](https://www.kaggle.com/competitions/wsdm-cup-multilingual-chatbot-arena) on Kaggle. In short, conversations between a user and two LLMs are given, and this competition challenges us to predict which responses users will prefer.
 
 > **Data files**
 > 
