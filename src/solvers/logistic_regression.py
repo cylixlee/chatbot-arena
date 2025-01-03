@@ -215,6 +215,8 @@ class LogisticRegressionSolver(OptunableProblemSolver[LogisticRegressionParams])
                 validate_accuracy = correct_validate / len(x_validate)
                 oof_accuracies.append(validate_accuracy)
 
+                print(f"Fold {fold}, Train {train_accuracy}, OOF {validate_accuracy}")
+
                 #
                 # # Make predictions.
                 # #

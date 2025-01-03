@@ -217,8 +217,14 @@ class LGBMSolver(ProblemSolver[LGBMParams]):
                 # to make a better OOF (out-of-fold) accuracy.
                 predict_train = model.predict(x_train)
                 predict_validate = model.predict(x_validate)
-                train_accuracies.append(accuracy_score(y_train, (predict_train > 0.5).astype(int)))
-                oof_accuracies.append(accuracy_score(y_validate, (predict_validate > 0.5).astype(int)))
+
+                train_accuracy = accuracy_score(y_train, (predict_train > 0.5).astype(int))
+                oof_accuracy = accuracy_score(y_validate, (predict_validate > 0.5).astype(int))
+
+                print(f"Fold {fold}, Train {train_accuracy}, OOF {oof_accuracy}")
+
+                train_accuracies.append(train_accuracy)
+                oof_accuracies.append(oof_accuracy)
 
                 # Make predictions.
                 #
